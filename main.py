@@ -3,23 +3,22 @@
 
 A deterministic program that draws a one-page newspaper front page
 summing up the world's news of Friday 20 November 2026 and writes it
-to /output/entry.png (1024x1024, PNG, <= 1 MiB).
+to /output/entry.png (1024 x 1024 PNG, under 1 MiB).
 
-Every story, date and figure below was verified against live reporting
-on 21 November 2026 (Reuters, AP, BBC, CNN, IMD, UN News, ISW and
-others); see SOURCES.md for the source of each fact. No network access,
-no clock, no randomness: the same run always writes the same bytes.
+Every story, date and figure was checked against live reporting on
+21 November 2026 (Reuters, AP, BBC, CNN, IMD, UN News, ISW and
+others); see SOURCES.md for the source of each fact. No network, no
+clock, no randomness: the same run always writes the same bytes.
 
-Run:  python3 main.py            (writes /output/entry.png)
-      OUTPUT_DIR=out python3 main.py   (writes out/entry.png, for local tests)
-Requires: Python 3 standard library ONLY. No third-party packages:
-the PNG encoder (zlib + struct), the canvas, and the bitmap fonts
-below are all implemented here. The font glyphs are data rasterized
-once at build time from Liberation fonts; they are not code and need
-no font files at run time.
+Run:  python3 main.py                  (writes /output/entry.png)
+      OUTPUT_DIR=out python3 main.py   (writes out/entry.png)
+
+Standard library only. The PNG writer (zlib + struct), the drawing
+surface and the two bitmap fonts below are all written here, by hand:
+a 5x7 text face and a 7x11 display face for the masthead. Nothing is
+imported from any font file or package.
 """
 
-import base64
 import math
 import os
 import struct
@@ -51,87 +50,87 @@ WHITE = (255, 255, 255)
 CREAM = (255, 252, 244)
 
 # ---------------------------------------------------------------- the news
-# 24 stories, 7 regions. Figures verified 21 Nov 2026; see SOURCES.md.
+# 24 stories, 7 regions. Figures checked 21 Nov 2026; see SOURCES.md.
 MASTHEAD_TITLE = "THE WORLD IN ONE PAGE"
 DATE_LINE = "FRIDAY, 20 NOVEMBER 2026"
-COUNT_LINE = "24 STORIES  \u00b7  7 REGIONS"
+COUNT_LINE = "24 STORIES  ·  7 REGIONS"
 
 STATS = [
     ("400+ DRONES", "110+ missiles fired at Ukraine overnight"),
-    ("\u22126.8% TAIEX", "Taiwan leads Asia\u2019s worst week since 2020"),
-    ("$3.79BN", "GTA VI day-one sales \u2014 the biggest ever"),
+    ("−6.8% TAIEX", "Taiwan leads Asia’s worst week since 2020"),
+    ("$3.79BN", "GTA VI day-one sales — the biggest ever"),
     ("300,000+", "people evacuated as Cyclone Akvan lands"),
 ]
 
 LEADS = [
     {
-        "kicker": "UKRAINE \u00b7 WAR IN EUROPE",
+        "kicker": "UKRAINE · WAR IN EUROPE",
         "art": "kyiv",
-        "headline": "Kyiv\u2019s bridges hit in Russia\u2019s biggest barrage of the month",
+        "headline": "Kyiv’s bridges hit in Russia’s biggest barrage of the month",
         "deck": "400+ drones, 110 missiles overnight; nine killed, 28 hurt. Three Dnipro bridges hit.",
         "accent": RED,
     },
     {
-        "kicker": "INDIA \u00b7 WEATHER",
+        "kicker": "INDIA · WEATHER",
         "art": "cyclone",
-        "headline": "Cyclone Akvan comes ashore on India\u2019s east coast",
-        "deck": "Landfall near Gopalpur at 8:30am with winds of 70\u201380 km/h. Heavy rain lashes Odisha and Andhra Pradesh.",
+        "headline": "Cyclone Akvan comes ashore on India’s east coast",
+        "deck": "Landfall near Gopalpur at 8:30am with winds of 70–80 km/h. Heavy rain lashes Odisha and Andhra Pradesh.",
         "accent": TEAL,
     },
     {
-        "kicker": "MARKETS \u00b7 ASIA",
+        "kicker": "MARKETS · ASIA",
         "art": "markets",
-        "headline": "Asia\u2019s AI sell-off deepens into a rout",
-        "deck": "Nikkei \u22124.8%, Kospi \u22125.2%, Taiex \u22126.8%. Even Anthropic\u2019s record $81bn IPO cannot stop the slide.",
+        "headline": "Asia’s AI sell-off deepens into a rout",
+        "deck": "Nikkei −4.8%, Kospi −5.2%, Taiex −6.8%. Even Anthropic’s record $81bn IPO cannot stop the slide.",
         "accent": BLUE,
     },
 ]
 
 CARDS = [
-    ("CLIMATE \u00b7 ANTALYA", "COP31 slips into overtime",
+    ("CLIMATE · ANTALYA", "COP31 slips into overtime",
      "Draft drops fossil-fuel words and a $120bn finance target."),
-    ("EUROPE \u00b7 BRUSSELS", "UK and EU seal a reset deal",
+    ("EUROPE · BRUSSELS", "UK and EU seal a reset deal",
      "Food trade eased, 100,000 youth visas a year, carbon link 2028."),
-    ("DIPLOMACY \u00b7 SHENZHEN", "Trump, Xi and Putin meet",
-     "First-ever trilateral, 90 minutes at APEC; a nuclear war \u201ccannot be won\u201d."),
-    ("JUSTICE \u00b7 THE HAGUE", "Myanmar guilty of genocide",
+    ("DIPLOMACY · SHENZHEN", "Trump, Xi and Putin meet",
+     "First-ever trilateral, 90 minutes at APEC; a nuclear war “cannot be won”."),
+    ("JUSTICE · THE HAGUE", "Myanmar guilty of genocide",
      "First state ever held responsible; reparations ordered for Rohingya."),
-    ("CULTURE \u00b7 GAMES", "$3.79bn in a day for GTA VI",
+    ("CULTURE · GAMES", "$3.79bn in a day for GTA VI",
      "32.5m copies pre-sold; Metacritic 99. Biggest launch in history."),
-    ("AMERICAS \u00b7 PERU", "M6.9 quake shakes the Andes",
-     "Tremor near Jun\u00edn at 7:09pm, felt in Lima; no casualties reported."),
-    ("MIDDLE EAST \u00b7 RIYADH", "Houthi missile hits Riyadh tower",
+    ("AMERICAS · PERU", "M6.9 quake shakes the Andes",
+     "Tremor near Junín at 7:09pm, felt in Lima; no casualties reported."),
+    ("MIDDLE EAST · RIYADH", "Houthi missile hits Riyadh tower",
      "Tallest tower struck; defences intercept more missiles."),
-    ("MARKETS \u00b7 NEW YORK", "Wall Street slides with tech",
-     "Nasdaq \u22122.3%; tech ETF in bear market, 20% off October peak."),
-    ("AMERICAS \u00b7 NEW YORK", "Rikers Island to close by 2032",
-     "Plan to shut the jail complex \u2014 five years past the legal deadline."),
-    ("UKRAINE \u00b7 KRYVYI RIH", "Evening strike kills two",
+    ("MARKETS · NEW YORK", "Wall Street slides with tech",
+     "Nasdaq −2.3%; tech ETF in bear market, 20% off October peak."),
+    ("AMERICAS · NEW YORK", "Rikers Island to close by 2032",
+     "Plan to shut the jail complex — five years past the legal deadline."),
+    ("UKRAINE · KRYVYI RIH", "Evening strike kills two",
      "Ballistic strike on city centre kills a child and a paramedic."),
-    ("SCIENCE \u00b7 MATHS", "A proof, with AI\u2019s help",
+    ("SCIENCE · MATHS", "A proof, with AI’s help",
      "A mathematician says Claude helped prove it; verification to come."),
-    ("AFRICA \u00b7 SOUTH AFRICA", "Mlambo-Ngcuka dies at 71",
+    ("AFRICA · SOUTH AFRICA", "Mlambo-Ngcuka dies at 71",
      "First woman deputy president and ex-UN Women chief, aged 71."),
 ]
 
 TIMELINE = [
-    ("OVERNIGHT", "Russia\u2019s barrage hits Kyiv\u2019s bridges."),
+    ("OVERNIGHT", "Russia’s barrage hits Kyiv’s bridges."),
     ("08:30 IST", "Cyclone Akvan lands near Gopalpur."),
-    ("MORNING", "Nikkei \u22124.8%, Kospi \u22125.2%, Taiex \u22126.8%."),
+    ("MORNING", "Nikkei −4.8%, Kospi −5.2%, Taiex −6.8%."),
     ("AFTERNOON", "COP31 talks spill into overtime."),
-    ("EVENING", "M6.9 quake in Peru; UK\u2013EU deal sealed."),
+    ("EVENING", "M6.9 quake in Peru; UK–EU deal sealed."),
 ]
 
 BRIEF = [
-    "Egypt\u2013IMF final review agreed on $8bn programme.",
+    "Egypt–IMF final review agreed on $8bn programme.",
     "Miami jury convicts Sanon over Haiti murder plot.",
     "Denmark approves Arctic pact with Greenland, US.",
-    "Knesset elects Matan Kahana speaker, 66\u201352.",
+    "Knesset elects Matan Kahana speaker, 66–52.",
     "Quad backs US-led AI supply-chain pact.",
     "Cell study: gene variant aids mosquito mating.",
     "Ukraine drones reportedly hit Russian chemical plant.",
     "M4.2 quake wakes Los Angeles; no injuries.",
-    "Germany rejects any new \u2018Yalta\u2019 deal over Europe.",
+    "Germany rejects any new ‘Yalta’ deal over Europe.",
 ]
 
 # Schematic world map: (label, x, y) in panel coordinates 0..1,
@@ -153,1724 +152,216 @@ MAP_BLOBS = [
     (0.87, 0.78, 0.045, 0.035),   # Australia
 ]
 MAP_LEGEND = [
-    "1 Kyiv  \u00b7  2 Antalya  \u00b7  3 Brussels  \u00b7  4 Shenzhen  \u00b7  5 Gopalpur  \u00b7  6 Riyadh",
-    "7 Lima  \u00b7  8 The Hague  \u00b7  9 New York  \u00b7  10 Pretoria  \u00b7  11 Cairo  \u00b7  12 Canberra",
+    "1 Kyiv  ·  2 Antalya  ·  3 Brussels  ·  4 Shenzhen  ·  5 Gopalpur  ·  6 Riyadh",
+    "7 Lima  ·  8 The Hague  ·  9 New York  ·  10 Pretoria  ·  11 Cairo  ·  12 Canberra",
 ]
 
 # ---------------------------------------------------------------- fonts
-# Embedded bitmap fonts. Each entry maps a Unicode code point to
-# (advance, xoff, yoff, width, height, base64 of 4-bit alpha, two pixels
-# per byte, high nibble first). xoff/yoff are relative to the text
-# origin (text origin: x = left edge, y = top of ascender).
-# Glyphs were rasterized once from Liberation Serif Bold / Liberation
-# Sans / Liberation Sans Bold; the table is pure data.
-_FONT_DATA = {
-    ('serif_b', 56): {
-        32: (14, 0, 0, 0, 0, ''),
-        65: (40.44, 0, 12, 41, 38, 'AAAAAAAAAADf////YAAAAAAAAAAAAAAAAAAAAD/////8AAAAAAAAAAAAAAAAAAAACf/////yAAAAAAAAAAAAAAAAAAAA7/////+AAAAAAAAAAAAAAAAAAABf//////4AAAAAAAAAAAAAAAAAAAv/7/////QAAAAAAAAAAAAAAAAAAf/0/////6AAAAAAAAAAAAAAAAAAf/wM/////wAAAAAAAAAAAAAAAAAN/2Bv////9gAAAAAAAAAAAAAAAAP/8QH/////wAAAAAAAAAAAAAAAAI/7AAv/////IAAAAAAAAAAAAAAADv9QAF/////3AAAAAAAAAAAAAAAE/+AAAP/////QAAAAAAAAAAAAAACv+QAACv////8wAAAAAAAAAAAAAB//MAAAT/////kAAAAAAAAAAAAABv/QAAAA7////+AAAAAAAAAAAAAAz/gAAAAI/////1AAAAAAAAAAAAAv/yAAAAA/////+wAAAAAAAAAAAAj/wAAAAADf////8QAAAAAAAAAAAO/2AAAAAAf/////cAAAAAAAAAAAT/8QAAAAAC/////8AAAAAAAAAAAK/6AAAAAAAM/////yAAAAAAAAAAD///////////////+AAAAAAAAAAF////////////////4AAAAAAAAAC/////////////////QAAAAAAAAB//MAAAAAAAAG/////6AAAAAAAAB//QAAAAAAAAAf/////wAAAAAAAA3/gAAAAAAAAAC/////9gAAAAAAA//zAAAAAAAAAAX/////wAAAAAAAn/4AAAAAAAAAAA//////IAAAAAAO/4AAAAAAAAAAAK/////3AAAAAAX/8wAAAAAAAAAABf/////QAAAAAL/+AAAAAAAAAAAAD/////8wAAAAH/+QAAAAAAAAAAAAr/////kAAAAH//QAAAAAAAAAAAAE/////+AAAEjv/6hTAAAAAAAAAkev/////7Ygf//////7AAAAAAAE//////////8H//////+wAAAAAABP//////////A='),
-        68: (40.44, 0, 13, 38, 38, 'D////////////+3KdAAAAAAAAA/////////////////6QAAAAAABNoz///////////////1QAAAAAAAF/////0ABNJ3/////+gAAAAAABf////9AAAAATf/////RAAAAAAX/////QAAAAACf/////QAAAAAF/////0AAAAAACP////+gAAAABf////9AAAAAAADP////9AAAAAX/////QAAAAAAAP/////wAAAAF/////0AAAAAAAAz/////MAAABf////9AAAAAAAAG/////5AAAAX/////QAAAAAAAAv/////gAAAF/////0AAAAAAAADv////8gAABf////9AAAAAAAAAv/////UAAAX/////QAAAAAAAAJ/////3AAAF/////0AAAAAAAACP////+QAABf////9AAAAAAAAAb/////oAAAX/////QAAAAAAAAG/////6AAAF/////0AAAAAAAABv////+wAABf////9AAAAAAAAAb/////oAAAX/////QAAAAAAAAG/////6AAAF/////0AAAAAAAAB/////+AAABf////9AAAAAAAAAj/////cAAAX/////QAAAAAAAAJ/////0AAAF/////0AAAAAAAAC/////8QAABf////9AAAAAAAAA3////9AAAAX/////QAAAAAAAAP////+QAAAF/////0AAAAAAAAT/////MAAABf////9AAAAAAAAJ/////QAAAAX/////QAAAAAAAH/////UAAAAF/////0AAAAAAAI////+wAAAABf////9AAAAAAAT////+EAAAAAX/////QAAAAABv////4wAAAAAF/////1AAAAJs/////SAAAAE2jP///////+7//////5AAAAAP/////////////////pIAAAAAD//////////////9uDAAAAAAAAAAAAAAAAAREREQAAAAAAAAAAA='),
-        69: (37.36, 0, 13, 35, 37, 'D////////////////////zAA////////////////////8wABNoz/////////////////MAAAAF/////0AAAAABEjRv/zAAAABf////9AAAAAAAAAD/8wAAAAX/////QAAAAAAAAA3/MAAAAF/////0AAAAAAAAAL/zAAAABf////9AAAAAAAAACf8wAAAAX/////QAAAAAAAAAb/MAAAAF/////0AAAAAAAAABVQAAAABf////9AAAAAAAAAAAAAAAAAX/////QAAAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAABf////9AAAAAAG/yAAAAAAAAX/////QAAAAACf8gAAAAAAAF/////0AAAAAA3/IAAAAAAABf////9AAAAAAP/yAAAAAAAAX/////////////8gAAAAAAAF//////////////IAAAAAAABf/////////////yAAAAAAAAX/////URERERH/8gAAAAAAAF/////0AAAAAA3/IAAAAAAABf////9AAAAAAK/yAAAAAAAAX/////QAAAAABv8gAAAAAAAF/////0AAAAAAEzAAAAAAAABf////9AAAAAAAAAAAAAAAAAX/////QAAAAAAAAAAAMxAAAF/////0AAAAAAAAAAAv9wAABf////9AAAAAAAAAAAb/YAAAX/////QAAAAAAAAAAK/1AAAF/////0AAAAAAAAAADf9AAABf////9AAAAAAAAAAB//MAAAX/////QAAAAAAAAABf/zAAAF/////0AAAAAAARI1v/8gE2jP//////////////////EP/////////////////////wD/////////////////////8A'),
-        71: (43.56, 2, 12, 41, 39, 'AAAAAAAAAEes7//+3KhSAAAAAAAAAAAAAABb///////////+tiAAAAAAAAAABu///////u///////+IAAAAAAAAs/////oQQAAFIz////0AAAAAAAE/////3AAAAAAAAKP//9AAAAAAAX////+IAAAAAAAAAAa//QAAAAAA/////8gAAAAAAAAAAAM/0AAAAAA7////2AAAAAAAAAAAACv9AAAAACf////0AAAAAAAAAAAAAj/QAAAAC/////2AAAAAAAAAAAAAG/0AAAACf////8QAAAAAAAAAAAAA8wwAAAA/////7AAAAAAAAAAAAAAAAAAAABP////9wAAAAAAAAAAAAAAAAAAAAj/////QAAAAAAAAAAAAAAAAAAAAM/////yAAAAAAAAAAAAAAAAAAAAD/////8AAAAAAAAAAAAAAAAAAAAB//////AAAAAAAAAAAAAAAAAAAAAv/////QAAAAAAAAAAAAAAAAAAAAP/////0AAAAAAAAAAAAAAAAAAAAE/////9AAAAAAAAAAAAAAAAAAAAA//////QAAAAAAAAAAAAAAAAAAAAL/////4AAAAAAAAO//////////8C//////AAAAAAAADv//////////AP/////wAAAAAAAAE2i//////YUgDf////8gAAAAAAAAAAL/////cAAAn/////UAAAAAAAAAAC/////3AAAF/////4AAAAAAAAAAAv////9wAAAP/////AAAAAAAAAAAL/////cAAACf////8gAAAAAAAAAC/////3AAAAL/////cAAAAAAAAAAv////9wAAAAn////+EAAAAAAAAAL/////cAAAAA7////5AAAAAAAAAC/////3AAAAAD/////0AAAAAAAAAv////9wAAAAAF/////0AAAAAAAAL/////cAAAAAAE/////4AAAAAAAC/////3AAAAAAACz////+gwAAADbP////9wAAAAAAAAbv/////93e///////7MAAAAAAAAABc////////////uEAAAAAAAAAAAAAAWL3v/+3KhkIAAAAAAAA='),
-        72: (43.56, 0, 13, 43, 37, 'D///////////8AAAf///////////oP///////////wAAB///////////+gE2jP/////IYxAAAAJHnv////+nUgAAAF/////0AAAAAAAAAL/////gAAAAAAX/////QAAAAAAAAAv////+AAAAAABf////9AAAAAAAAAC/////4AAAAAAF/////0AAAAAAAAAL/////gAAAAAAX/////QAAAAAAAAAv////+AAAAAABf////9AAAAAAAAAC/////4AAAAAAF/////0AAAAAAAAAL/////gAAAAAAX/////QAAAAAAAAAv////+AAAAAABf////9AAAAAAAAAC/////4AAAAAAF/////0AAAAAAAAAL/////gAAAAAAX/////QAAAAAAAAAv////+AAAAAABf////9AAAAAAAAAC/////4AAAAAAF/////0AAAAAAAAAL/////gAAAAAAX////////////////////+AAAAAABf////////////////////4AAAAAAF/////////////////////gAAAAAAX/////QAAAAAAAAAv////+AAAAAABf////9AAAAAAAAAC/////4AAAAAAF/////0AAAAAAAAAL/////gAAAAAAX/////QAAAAAAAAAv////+AAAAAABf////9AAAAAAAAAC/////4AAAAAAF/////0AAAAAAAAAL/////gAAAAAAX/////QAAAAAAAAAv////+AAAAAABf////9AAAAAAAAAC/////4AAAAAAF/////0AAAAAAAAAL/////gAAAAAAX/////QAAAAAAAAAv////+AAAAAABf////9AAAAAAAAAC/////4AAAAAAF/////0AAAAAAAAAL/////gAAAAAAX/////QAAAAAAAAAv////+AAAAAABf////9AAAAAAAAAC/////4AAAAAAF/////0AAAAAAAAAL/////gAAABRoz/////yGQQAAACV57/////p1MA////////////AAAH///////////6D///////////8AAAf///////////oA=='),
-        73: (21.8, 1, 13, 19, 37, 'H///////////4f///////////gFGnf////+4YxAAAG/////zAAAAAAb/////MAAAAABv////8wAAAAAG/////zAAAAAAb/////MAAAAABv////8wAAAAAG/////zAAAAAAb/////MAAAAABv////8wAAAAAG/////zAAAAAAb/////MAAAAABv////8wAAAAAG/////zAAAAAAb/////MAAAAABv////8wAAAAAG/////zAAAAAAb/////MAAAAABv////8wAAAAAG/////zAAAAAAb/////MAAAAABv////8wAAAAAG/////zAAAAAAb/////MAAAAABv////8wAAAAAG/////zAAAAAAb/////MAAAAABv////8wAAAAAG/////zAAAAAAb/////MAAAAABv////8wAAAAAG/////zAAABRp3/////uGMR///////////+H///////////4A=='),
-        76: (37.36, 0, 13, 35, 37, 'D////////////wAAAAAAAAAA////////////8AAAAAAAAAABNoz/////yGQgAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAABf////9AAAAAAAAAAAAAAAAAX/////QAAAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAABf////9AAAAAAAAAAAAAAAAAX/////QAAAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAABf////9AAAAAAAAAAAAAAAAAX/////QAAAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAABf////9AAAAAAAAAAAAAAAAAX/////QAAAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAABf////9AAAAAAAAAAAAAAAAAX/////QAAAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAABf////9AAAAAAAAAAAAAAAAAX/////QAAAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAABf////9AAAAAAAAAAAAAAAAAX/////QAAAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAABf////9AAAAAAAAAAAABEAAAX/////QAAAAAAAAAAAn/AAAF/////0AAAAAAAAAAAO/QAABf////9AAAAAAAAAAAP/wAAAX/////QAAAAAAAAAAI/6AAAF/////0AAAAAAAAAADP+QAABf////9AAAAAAAAAAB//cAAAX/////QAAAAAAAAABv/2AAAF/////0AAAAAAAAE1z/9AE2jP/////u7u7u7v//////MP/////////////////////xD/////////////////////8A'),
-        78: (40.44, 1, 13, 39, 37, '////////4QAAAAAABf///////7////////+wAAAAAABf///////7E1i//////4AAAAAAABRoz/+nUgAAA///////QAAAAAAAAAb/8AAAAAA///////4QAAAAAAAAb/8AAAAAA////////AAAAAAAAAb/8AAAAAA////////4AAAAAAAAb/8AAAAAA//8//////QAAAAAAAb/8AAAAAA//zz/////4QAAAAAAb/8AAAAAA//zLv/////AAAAAAAb/8AAAAAA//zBP/////4AAAAAAb/8AAAAAA//zAI//////UAAAAAb/8AAAAAA//zAAz/////4gAAAAb/8AAAAAA//zAAHv/////AAAAAb/8AAAAAA//zAABP/////5AAAAb/8AAAAAA//zAAAI//////UAAAb/8AAAAAA//zAAAAv/////8gAAb/8AAAAAA//zAAAAHv/////AAAb/8AAAAAA//zAAAAA//////5AAb/8AAAAAA//zAAAAAH//////UAb/8AAAAAA//zAAAAAAv/////8gb/8AAAAAA//zAAAAAAHv/////Qb/8AAAAAA//zAAAAAAA//////5b/8AAAAAA//zAAAAAAAH//////z/8AAAAAA//zAAAAAAAAr///////8AAAAAA//zAAAAAAAADf//////8AAAAAA//zAAAAAAAAA///////8AAAAAA//zAAAAAAAAAG//////8AAAAAA//zAAAAAAAAAAr/////8AAAAAA//zAAAAAAAAAADf////8AAAAAA//zAAAAAAAAAAAv////8AAAAAA//zAAAAAAAAAAAG////8AAAAAA//zAAAAAAAAAAAAn///8AAAAAA//zAAAAAAAAAAAADf//8AAAE2jP/7hjEAAAAAAAAAAv//8AAA////////8QAAAAAAAAAF//8AAA////////8QAAAAAAAAAAn/8AAAA='),
-        79: (43.56, 2, 12, 39, 39, 'AAAAAAAAFYve///cpzAAAAAAAAAAAAAABs//////////6SAAAAAAAAAAAG7/////7N7/////ogAAAAAAAALP////pAAAAX3////2AAAAAAAD7////kAAAAAACf////gAAAAAAu////4gAAAAAAAI////+AAAAADf////QAAAAAAAAAv////1AAAAj////7AAAAAAAAAAL////+EAAB/////0AAAAAAAAAAC/////gAAI/////gAAAAAAAAAABv////8QAO////+gAAAAAAAAAAAf////9gA/////9wAAAAAAAAAAAO/////ACP////9AAAAAAAAAAAAL/////wC/////8gAAAAAAAAAAAJ/////0Dv////8AAAAAAAAAAAAH/////3D/////8AAAAAAAAAAAAG/////5L/////4AAAAAAAAAAAAF/////7P/////0AAAAAAAAAAAAE/////8P/////0AAAAAAAAAAAAE/////8T/////0AAAAAAAAAAAAE/////9P/////0AAAAAAAAAAAAE/////8P/////0AAAAAAAAAAAAE/////8H/////4AAAAAAAAAAAAF/////6D/////8AAAAAAAAAAAAG/////5Df////8AAAAAAAAAAAAH/////2Cv////8gAAAAAAAAAAAJ/////zB/////9AAAAAAAAAAAAL/////wAv////9wAAAAAAAAAAAO////+wAM////+wAAAAAAAAAAAv////9QAG/////wAAAAAAAAAABv////4AAA7////1AAAAAAAAAADP////cAAAX////7AAAAAAAAAAP////9AAAACv////UAAAAAAAAAz////zAAAAAM////8gAAAAAAAI////9gAAAAABz////kAAAAAACf////cAAAAAAACf////pAAAAW3////lAAAAAAAAAE3/////3M7/////kQAAAAAAAAAABL//////////6CAAAAAAAAAAAAAABIve///spjAAAAAAAAA='),
-        80: (34.2, 0, 13, 33, 37, 'D///////////7tuWIAAAAAD////////////////YEAAAATaM//////////////+AAAAAAF/////0ABJa/////8EAAAAF/////0AAAAPv////sAAAAF/////0AAAABP////9gAAAF/////0AAAAAM/////QAAAF/////0AAAAAI/////zAAAF/////0AAAAAF/////2AAAF/////0AAAAAE/////4AAAF/////0AAAAAD/////5AAAF/////0AAAAAD/////4AAAF/////0AAAAAE/////3AAAF/////0AAAAAG/////1AAAF/////0AAAAAJ/////xAAAF/////0AAAAAO/////AAAAF/////0AAAAB/////9AAAAF/////0AAAAb/////sAAAAF/////0ABJs/////9EAAAAF//////////////+hAAAAAF/////////////8QAAAAAAF/////////+7JYgAAAAAAAF/////0AAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAAAAF/////0AAAAAAAAAAAAADWM/////8l1MQAAAAAAAAC////////////2AAAAAAAAC////////////2AAAAAAAAA='),
-        82: (40.44, 0, 13, 41, 37, 'D/////////////7bhiAAAAAAAAAA/////////////////9gQAAAAAAABNoz///////////////+AAAAAAAAAAF/////0AAASWf////+xAAAAAAAABf////9AAAAAAc////+wAAAAAAAAX/////QAAAAAAe////9gAAAAAAAF/////0AAAAAACP////0AAAAAAABf////9AAAAAAAT/////MAAAAAAAX/////QAAAAAAB/////2AAAAAAAF/////0AAAAAAAP////9wAAAAAABf////9AAAAAAAD/////gAAAAAAAX/////QAAAAAAA/////3AAAAAAAF/////0AAAAAAAv////9QAAAAAABf////9AAAAAAAX/////IAAAAAAAX/////QAAAAAAK/////QAAAAAAAF/////0AAAAAAP/////YAAAAAAABf////9AAAAAA+/////AAAAAAAAAX/////QAABJb/////9EAAAAAAAAF////////////////sQAAAAAAAABf//////////////xAAAAAAAAAAAX/////////////9wAAAAAAAAAAAF/////0AADf////8QAAAAAAAAAABf////9AAAP/////sAAAAAAAAAAAX/////QAAAn/////cAAAAAAAAAAF/////0AAAA7/////IAAAAAAAAABf////9AAAAE/////9AAAAAAAAAAX/////QAAAAK/////4AAAAAAAAAF/////0AAAAAe/////0AAAAAAAABf////9AAAAABf/////gAAAAAAAAX/////QAAAAAC/////+gAAAAAAAF/////0AAAAAAL/////9QAAAAAABf////9AAAAAAAf/////4QAAAAAAX/////QAAAAAAAz/////sAAAAAAF/////0AAAAAAAD//////YAAAA1jP/////IYxAAAAAI//////p0EL///////////wAAAAAN////////C///////////8AAAAABP///////w'),
-        84: (37.36, 0, 13, 37, 37, 'L///////////////////////gv//////////////////////+C//////7u7//////////////4L/9jIAAAAL/////wAAAAE13/gv/wAAAAAAv/////AAAAAACv+C/9AAAAAAC/////8AAAAAAI/4L/wAAAAAAL/////wAAAAAAb/gv+gAAAAAAv/////AAAAAABf+C/4AAAAAAC/////8AAAAAAD/4L/cAAAAAAL/////wAAAAAAH/gEQQAAAAAAv/////AAAAAAAEQgAAAAAAAAC/////8AAAAAAAAAAAAAAAAAAL/////wAAAAAAAAAAAAAAAAAAv/////AAAAAAAAAAAAAAAAAAC/////8AAAAAAAAAAAAAAAAAAL/////wAAAAAAAAAAAAAAAAAAv/////AAAAAAAAAAAAAAAAAAC/////8AAAAAAAAAAAAAAAAAAL/////wAAAAAAAAAAAAAAAAAAv/////AAAAAAAAAAAAAAAAAAC/////8AAAAAAAAAAAAAAAAAAL/////wAAAAAAAAAAAAAAAAAAv/////AAAAAAAAAAAAAAAAAAC/////8AAAAAAAAAAAAAAAAAAL/////wAAAAAAAAAAAAAAAAAAv/////AAAAAAAAAAAAAAAAAAC/////8AAAAAAAAAAAAAAAAAAL/////wAAAAAAAAAAAAAAAAAAv/////AAAAAAAAAAAAAAAAAAC/////8AAAAAAAAAAAAAAAAAAL/////wAAAAAAAAAAAAAAAAAAv/////AAAAAAAAAAAAAAAAAAC/////8AAAAAAAAAAAAAAAAAAL/////wAAAAAAAAAAAAAAAkaK7/////qGQgAAAAAAAAAACP////////////wAAAAAAAAAAI/////////////AAAAAAA=='),
-        87: (56, 0, 13, 56, 38, 'P//////////0AAAAAAAAAAAAAAAAC///////8j//////////9AAAAAAAAAAAAAAAAAv///////ICaf/////5dCAAAAAAAAAAAAAAAAAANXv//5UgAAC/////8wAAAAAAAAAN//AAAAAAAAAF//oAAAAAb/////kAAAAAAAAAP//1AAAAAAAACv/1AAAAAB/////+AAAAAAAAAJ///AAAAAAAAA7/8QAAAAAL/////0AAAAAAAAD///8gAAAAAAA//8AAAAAABf////+gAAAAAAAG////gAAAAAAAj/9wAAAAAAD/////8AAAAAAADP///+AAAAAAAN//IAAAAAAAr/////UAAAAAAC/////1AAAAAAH//QAAAAAAAF/////7AAAAAACP////+wAAAAAG//gAAAAAAAAP/////xAAAAAA7/////8QAAAAC//zAAAAAAAACv////9gAAAABf//////gAAAAA//4AAAAAAAAAT/////sAAAAAv//////+AAAABP/5AAAAAAAAAA7/////EAAAAf///////0AAAAj/9AAAAAAAAAAJ/////3AAAAj/9/////+gAAAN//AAAAAAAAAABP/////AAAAO/9DP////8QAAL/+gAAAAAAAAAADv////8gAAT/9wb/////cAAG//UAAAAAAAAAAAn/////cAAK//EA/////9AAC//xAAAAAAAAAAAD/////9AAH/+wAJ/////zAA//sAAAAAAAAAAAAO/////zAH//UAA/////+gBP/2AAAAAAAAAAAACP////+ADf/gAADf////8An/8gAAAAAAAAAAAAP/////4D//gAAAb/////YO/9AAAAAAAAAAAAAA3/////Of/yAAAB/////8L/+AAAAAAAAAAAAAAI/////6//wAAAAK/////6//MAAAAAAAAAAAAAAv///////1AAAAA////////gAAAAAAAAAAAAAADf//////8AAAAADf//////kAAAAAAAAAAAAAAAf//////5AAAAAAf//////0AAAAAAAAAAAAAAAC//////8wAAAAAB//////8AAAAAAAAAAAAAAAAM/////8AAAAAAAK/////6AAAAAAAAAAAAAAAAB/////9gAAAAAABP////9QAAAAAAAAAAAAAAAAH/////EAAAAAAADv////EAAAAAAAAAAAAAAAAAz///+gAAAAAAAAf///+wAAAAAAAAAAAAAAAAAG////QAAAAAAAAB////YAAAAAAAAAAAAAAAAAAf///QAAAAAAAAAL///yAAAAAAAAAAAAAAAAAAC///cAAAAAAAAABf//0AAAAAAAAAAAAAAAAAAAb//xAAAAAAAAAADv/4AAAAAAAAAAAAAAAAAAAA//sAAAAAAAAAAAj/8wAAAAAAAAA='),
-    },
-    ('serif_b', 21): {
-        32: (5.25, 0, 0, 0, 0, ''),
-        33: (7, 1, 5, 5, 14, 'D/8A79AN/AC/oAr5AI9wB/YAX0AE8wAvEAAAAK+gL/8gr6A='),
-        34: (11.66, 2, 5, 8, 5, 'n+A/9H+wH/FPkA7wL2AMwA9ACaA='),
-        35: (10.5, 0, 5, 11, 14, 'AAbwA/QAAJ0AbxAADKAJ4AAA9wDLAL//////M0j1RfhAAI4ATyAADLAI8AC//////zNvdE+kQAXyAfYAAH8APzAACtAG8AAAywCOAAA='),
-        36: (10.5, 0, 4, 10, 16, 'AAA9AAAAO+/9oAb7XTvwDvM9AvAf8z0AQA/9fQAACv//cQAB3///UAAH7//0AAA+v/sAAD0J/UwAPQX9TwA9B/lPtE1O4RjN/9gAAAA9AAA='),
-        37: (21, 2, 5, 18, 14, 'Bd/VAAAAnhAAT7DPMAAE9AAAr3B/oAAegAAAz2BvwACtAAAAz1BvwAbzAAAAr3CPoB9wAAAAT7DPMMwEz9cABu/VB/If4Z9wAAAAL2B/oE/QAAAA2wCfkD/wAAAI4QCfkD/wAAA/QAB/oE/QAADZAAAf4Z9gAAnQAAAE39cA'),
-        38: (17.5, 1, 5, 16, 14, 'AAbP/FAAAAAAb+JP9AAAAADPsA75AAAAAN/QD/kAAAAAn/Nf8wAAAAAv/v0wAAAAAF7/8wC//7AK/n//QA36AG/1BP/1D/QAv/EAPv+/0ADP8QAC7/9AAJ/1AAAv/5AAHv5iJc/v+gABjO/9kh3/1Q=='),
-        39: (5.83, 1, 5, 4, 5, 'X/Iv8A/QDbALgA=='),
-        40: (7, 0, 4, 7, 19, 'AAAHQAAd0QAd8gAK+QAD/0AAn/AADP4AAP/AAA/7AAH/sAAP+wAA/8AADP0AAJ/wAAL/MAAK+QAAHfIAABzRAAAHQA=='),
-        41: (7, 0, 4, 7, 19, 'RwAAAdwQAAL9EAAJ+gAAT/IAAP+QAA78AADP8AAM/wAAv/EADP8AAM/wAA78AAD/kABP8gAK+gAC/RAB3BAARwAAAA=='),
-        42: (10.5, 0, 5, 10, 7, 'AADfUAAIwZ8W4Qz+ra/1ADv/5wAM/p2/9QixnxbhAADfUAA='),
-        43: (11.97, 1, 7, 10, 10, 'AADLAAAAAMsAAAAAywAAAADLAADv/////md33Xd2AADLAAAAAMsAAAAAywAAAAB3AAA='),
-        44: (5.25, 0, 16, 5, 6, 'C/oC//UI/2AM8QflCZIA'),
-        45: (7, 0, 13, 7, 2, 'P///MszMwg=='),
-        46: (5.25, 0, 16, 5, 3, 'CPsA//QI+wA='),
-        47: (5.83, -1, 5, 7, 14, 'AAAJ0AAA6AAATyAACdAAAOcAAE8gAArAAAD3AABfIAAKwAAA9gAAXxAAC7AAAPYAAA=='),
-        48: (10.5, 0, 5, 10, 14, 'ABnvxQAA34L/UAb/EK/gDP8Af/QP/QBv+C/9AF/6L/wAT/ov/ABP+i/9AF/5D/0Ab/cM/wB/9Ab/EK/gAN+C/1AAGe/FAA=='),
-        49: (10.5, 1, 5, 9, 14, 'AAbvAABd//AAS2//AAAA//AAAA//AAAA//AAAA//AAAA//AAAA//AAAA//AAAA//AAAA//AAAB//EAT////1'),
-        50: (10.5, 0, 5, 10, 14, 'Bs7/xgAKwhj/oApwAN/yBSAAr/QAAAC/8wAAAO/wAAAE/3AAAA36AAAAv5AAAAr2AAAAr0AAAAn3VVVSH/////kv////+Q=='),
-        51: (10.5, 0, 5, 10, 14, 'B97/xwAMwhr/kAxQAP/xBhAA7/IAAAD/8AAAGf9gAAz/1AAAA1n/kAAAAJ/2AAAAT/spAABf+y8AAJ/4H4EW/9AL3//HAA=='),
-        52: (10.5, 0, 5, 11, 14, 'AAAA37AAAACP+wAAAD//sAAADZ/7AAAI0P+wAAP0D/sAANkA/7AAjQAP+wA/URH/wQr/////8b//////EAAAD/sAAAAA/7AAAAAP+wA='),
-        53: (10.5, 0, 5, 10, 14, 'B////7AH////sAfEREQwB6AAAAAHoAAAAAegAAAAB+3/2RADYhX/4QAAAI/4AAAAX/saAABf+h8QAI/2H5IV/8AK3v/HAA=='),
-        54: (10.5, 0, 5, 10, 14, 'AAS+/qAAf+MY8AP/YAHwCv8AAIAP/QAAAC/+z/swP/1l7/JP+wBv+T/8AD/9D/0AL/0N/wAv/Ab/ME/4AM+xr+EACN/qEA=='),
-        55: (10.5, 1, 5, 9, 14, 'z/////z////7yUREb0swAAngAAAC9wAAAJ8QAAAfoAAACfQAAAH9AAAAn3AAAB/xAAAJ+gAAAf8wAACf0AAA'),
-        56: (10.5, 0, 5, 10, 14, 'AEvv2AAF/2Lf0A3/AI/1D/8Af/cN/wCP9AX/Yd/AAG///AAF/1LPwA78AE/3P/oAL/tP+gAv/B/7AE/5Cf9Bv/IAfP/qIA=='),
-        57: (10.5, 0, 5, 10, 14, 'AGz/xQAJ/0L/cC/8AJ/xX/oAb/Vv+gBf+D/8AE/6C/90j/sAjv7P+wAAAF/5AAAAf/cIAACv8g4wAP+gDqIa/RAJ3/2BAA=='),
-        58: (7, 1, 9, 5, 10, 'C/kD//AL+QAAAAAAAAAAAAAAv5A//wC/kA=='),
-        59: (7, 1, 9, 5, 13, 'C/kD//EL+QAAAAAAAAAAAAAB34Bf/yC/8wDtAZ4wxwAA'),
-        60: (11.97, 1, 6, 10, 11, 'AAAAAFoAAABM+QAATPswADv7MAA7+zAAAP9gAAAAO/swAAAAO/swAAAATPswAAAATPkAAAAAWg=='),
-        61: (11.97, 1, 9, 10, 6, '//////13d3d3dgAAAAAAAAAAAAD//////Xd3d3d2'),
-        62: (11.97, 1, 6, 10, 11, 'tAAAAAC/swAAAATPswAAAATPogAAAATPogAAAAj9AAAEz6IABM+iAATPswAAv7MAAAC0AAAAAA=='),
-        63: (10.5, 1, 5, 9, 14, 'fO/8YAuyGP+QtgAO/xUQAM/zAAAM/yAAAf/QAAXf8wAI/pIAAF8wAAAB8QAAAAAAAAAJ+wAAAf/zAAAJ+wAA'),
-        64: (19.53, 1, 5, 18, 18, 'AAAAWt/+txAAAABe1zESfuQAAAn4AAAAAd8wAI9gAAAAAC/QBPoAAAAAAAvyDfEAA63/0Aj1T5AAj3T/sAf2n1AH9gL/cAj0zxAv8AX/MAvx3wCPwAn/AA6w7wDPoA38AF8gzxDfoB/5AeYAn0C/+N/8fVAAT6At6R39gQAADPQAAAAAAAAAAv4wAAAAOwAAAC36QhJr0wAAAABa3/2kAAAA'),
-        65: (15.17, 0, 5, 16, 14, 'AAAB//QAAAAAAAf/+gAAAAAADa//EAAAAAA/Hv9gAAAAAJoI/8AAAAAA5AL/8gAAAAXgAM/4AAAAC4AAb/4AAAAf/////0AAAHwiIiv/oAAA1gAABf/xAAPxAAAA//YACcAAAACv/ACv/kAAHf//4A=='),
-        66: (14, 0, 5, 14, 15, 'jv///+xwAADv9yO//QAA7/UAL/9AAO/1AA//QADv9QAv/xAA7/UBr/UAAO////5gAADv9yJe/lAA7/UABP/xAO/1AAD/9QDv9QAA//UA7/UAA//xAO/2ET3/cI7////+pAAAAAAAAAAA'),
-        67: (15.17, 1, 5, 13, 14, 'AAOd/+2nEAr/tBJL9Ar/kAAADFT/8QAAAJWf+wAAAAAN/4AAAAAA7/cAAAAAD/9wAAAAAN/4AAAAAAn/sAAAACM//xAAAAeAn/oAAACoAJ/7QRSfgAA53/7KcQ=='),
-        68: (15.17, 0, 5, 15, 15, 'fv///+tgAAAN/3JK/+MAAN/1AAf/4QAN/1AADf+AAN/1AACP/QAN/1AABf/wAN/1AABP/xAN/1AABP/xAN/1AABf/wAN/1AAB//QAN/1AACv+AAN/1AAL/4QAN/3El3+QAfv////yBAAAAAAAAAAAAA='),
-        69: (14, 0, 5, 13, 14, 'jv//////EA7/ciIl8QDv9QAADxAO/1AAAHAA7/UABhAADv9QAPMAAO////8wAA7/ciLzAADv9QAJIAAO/1AAAAAA7/UAAAHADv9QAABNAO/3IiIq2O///////A=='),
-        70: (12.83, 0, 5, 12, 14, 'jv/////9AO/3IiOdAO/1AABdAO/1AAA9AO/1AAAAAO/1AAsAAO/1AD8AAO////8AAO/3Ik8AAO/1AA0AAO/1AAAAAO/1AAAAAO/1AAAAbv//6AAA'),
-        71: (16.33, 1, 5, 15, 14, 'AAKM7/64QAAI/7QRSf8ACP+QAAAD8AL/8QAAAA8An/sAAAAAAA3/gAAAAAAA7/cAAAAAAA7/cAAAAAAA3/gAAH7//6n/sAAADf9gP/8QAADf9gCP+gAADf9gAI/7QRPv9gAAKM7/7JYQ'),
-        72: (16.33, 0, 5, 16, 14, 'jv//0Qr///0A7/UAAA//MADv9QAAD/8wAO/1AAAP/zAA7/UAAA//MADv9QAAD/8wAO///////zAA7/ciIi//MADv9QAAD/8wAO/1AAAP/zAA7/UAAA//MADv9QAAD/8wAO/1AAAP/zCO///RCv///Q=='),
-        73: (8.17, 0, 5, 8, 14, 'Pv//5QCP+wAAj/sAAI/7AACP+wAAj/sAAI/7AACP+wAAj/sAAI/7AACP+wAAj/sAAI/7AD7//+Y='),
-        74: (10.5, 0, 5, 10, 14, 'AAfv//wAAA3/YAAADf9gAAAN/2AAAA3/YAAADf9gAAAN/2AAAA3/YAAADf9gAAAN/1AFAA3/QB8ADv4AH2KP9QAN/+tAAA=='),
-        75: (16.33, 0, 5, 17, 14, 'jv//0QCP/9AADv9QAAHMEAAA7/UAAtsAAAAO/1AD6QAAAADv9QP4AAAAAA7/Vf8gAAAAAO/7//0AAAAADv/4//oAAAAA7/YI//cAAAAO/1AL//MAAADv9QAe/+EAAA7/UAA//7AAAO/1AAB//4AI7//9QAC//+I='),
-        76: (14, 0, 5, 14, 14, 'fv//5QAAAADv9QAAAAAA7/UAAAAAAO/1AAAAAADv9QAAAAAA7/UAAAAAAO/1AAAAAADv9QAAAAAA7/UAAAAAAO/1AAAAIADv9QAAAPEA7/UAAATwAO/2EREq4I7//////8A='),
-        77: (19.83, 0, 5, 20, 14, 'jv/+AAAACP//0gDv/2AAAA7/9wAA7f/QAABv3/cAAOf/9AAA2c/3AADmn/oABPLP9wAA5i//EAuwz/cAAOYL/4AvQM/3AADmBP/gnQDP9wAA5gDf9/cAz/cAAOYAf//wAM/3AADmAA//kADP9wAA5gAJ/yAAz/cAAOYAAvsAAM/3AI7/0wC0AH7//9I='),
-        78: (15.17, 0, 5, 15, 14, 'fv/3AADf/7AN//MAAC8gAN//4QAC8gANjv+wAC8gANc//3AC8gANcH//MC8gANcAv/4S8gANcAHv+y8gANcAA//58gANcAAH//8gANcAAAv/8gANcAAAHv8gANcAAAA/8gfv/TAAAH8g'),
-        79: (16.33, 1, 5, 15, 14, 'AAWt/+twAAAc/2EUz+MADP9AAAHv8gX/0AAACP+gr/kAAABP/w3/cAAAAv/z//cAAAAf/07/cAAAAf/03/gAAAAv/yr/oAAABP/wT/0AAACP+QC/9QAAHv4QAL/2EU3+MAAASt/+tgAA'),
-        80: (12.83, 0, 5, 13, 14, 'jv///8ggAA7/cm7/QADv9QBf/QAO/1AB//IA7/UAH/8wDv9QAv/xAO/1AG/9AA7/cm//QADv///qMAAO/1AAAAAA7/UAAAAADv9QAAAAAO/1AAAABu///oAAAA=='),
-        81: (16.33, 1, 5, 15, 17, 'AAWt/+twAAAc/2EUz+MADP9AAAHv8gX/0AAACP+gr/kAAABP/w3/cAAAAv/z//cAAAAf/07/cAAAAf/03/gAAAAv/yr/oAAABP/wT/0AAACP+QC/9QAAHv4QAL/2EU39MAAASt///AAAAAAACP/2AAAAAAAJ//lBAAAAAAbP/UA='),
-        82: (15.17, 0, 5, 16, 14, 'jv///+xxAAAA7/cib/4gAADv9QAH/7AAAO/1AAT/4AAA7/UABP/gAADv9QAH/7AAAO/1AV//MAAA7////7MAAADv9yv/oAAAAO/1Ae/1AAAA7/UAb/8gAADv9QAL/8AAAO/1AAH/+ABu///RAG//5A=='),
-        83: (11.67, 1, 5, 10, 14, 'AZ3/7IAu9RJd0J+AAAXQz5AAAZC/+SAAAG///GAACf///kAAXP//8gAAJ+/5UAAAHfzjAAAI++cAAAr374ICj8Ba3v/HAA=='),
-        84: (14, 0, 5, 14, 14, 'r///////+6ohGv+hIqumAAr/kABrlAAK/5AASQAACv+QAAAAAAr/kAAAAAAK/5AAAAAACv+QAAAAAAr/kAAAAAAK/5AAAAAACv+QAAAAAAr/kAAAAAAK/5AAAAAK7//+kAA='),
-        85: (15.17, 0, 5, 15, 14, 'bv//0ADf/4AO/1AAAD8QAO/1AAAD8QAO/1AAAD8QAO/1AAAD8QAO/1AAAD8QAO/1AAAD8QAO/1AAAD8QAO/1AAAD8QAO/1AAAD8AAL/4AAAG4AAF//IAAekAAAn/+nntEAAABb7/xwAA'),
-        86: (15.17, 0, 5, 15, 14, 'r//+IAAe/8B//wAAAA5gAP/2AAAF8QAJ/9AAALkAAC//QAAvMAAAv/sACMAAAAT/8gDmAAAADf+QXgAAAABv/xyQAAAAAP/58gAAAAAI//sAAAAAAC//UAAAAAAAv+AAAAAAAAT4AAAA'),
-        87: (21, 0, 5, 21, 14, 'n//+UAAAAACv/4Bf/xAAAvcAAD9QAP/2AACf4AAH8AAK/8AADv9AAMsAAE//EAX/+gAfUAAA7/cAzf/xBvEAAAn/0C9N/3C7AAAAP/840H/9D2AAAADv+ecB//nxAAAACP//EAr//AAAAAAv/7AAT/9wAAAAAN/0AADf8gAAAAAH/gAAB/0AAAAAAC+AAAAfgAAA'),
-        88: (15.17, 0, 5, 15, 14, 'Hf//5gfv/RAE//IABPQAAAr/sAHnAAAAH/9QygAAAABv/p0AAAAAAM//IAAAAAAC//QAAAAAAA3/0AAAAAAKzf+AAAAABuI//yAAAAP0AJ/8AAAB6AAB7/YAALsAAAX/8Qf//RAK///8'),
-        89: (15.17, 0, 5, 15, 14, 'j///5QC//6AM/9AAAH8QAE//YAAegAAAv/4ACOEAAAL/9wH3AAAACf/gjgAAAAAf/59gAAAAAH//0AAAAAAA//YAAAAAAA7/UAAAAAAA7/UAAAAAAA7/UAAAAAAA7/UAAAAADf///mAA'),
-        90: (14, 1, 5, 12, 14, 'X//////0XTIRG//hWgAAT/9QJAAA7/sAAAAJ//EAAABP/2AAAADf/AAAAAj/8gAAAD//cAAAAN/9AAAAB//zAAAeL/+AAABdz/4RESS8///////7'),
-        91: (7, 1, 4, 6, 18, 'f/7Cf/IAf/IAf/IAf/IAf/IAf/IAf/IAf/IAf/IAf/IAf/IAf/IAf/IAf/IAf/IAf/IAf/7C'),
-        92: (5.83, -1, 5, 7, 14, 'D2AAALsAAAXxAAAPYAAArAAABfIAAA9wAACsAAAE8gAADnAAAJ0AAATyAAAOgAAAnQ=='),
-        93: (7, 0, 4, 6, 18, 'LO/3AC/3AC/3AC/3AC/3AC/3AC/3AC/3AC/3AC/3AC/3AC/3AC/3AC/3AC/3AC/3AC/3LO/3'),
-        94: (12.2, 1, 5, 10, 10, 'AACcAAAAAf8wAAAH2qAAAA508QAAXxDYAADJAG4AA/IAD2AKwAAJ0B9QAAL0jgAAALs='),
-        95: (10.5, -1, 20, 12, 2, 'L//////6F3d3d3d1'),
-        96: (7, 0, 5, 6, 3, 'DP8gAH/AAAPV'),
-        97: (10.5, 0, 9, 11, 10, 'Ab3v6iAALkAv/gACoADP8gAAAAz/MAKd7v/zAO/iDP8wT/oAz/ME/6AM/zAf/1Xv8wBN/pn/0g=='),
-        98: (11.67, 0, 4, 11, 15, 'j/8wAAAAz/MAAAAM/zAAAADP8wAAAAz/IAAAAM/4z/swDP9yX/8gz/MAf/gM/zAD/7DP8wAv/Az/MAP/wM/zAE/5DP8wCP9Az/UU/6AEi+/9YAA='),
-        99: (9.33, 0, 9, 9, 10, 'ACnv7WAu/CK5DP8gBZH/0AABP/sAAAT/sAAAL/0AAADf8gAABP/mRWACrv7F'),
-        100: (11.67, 0, 4, 12, 15, 'AAAAb/9gAAAACf9gAAAACf9gAAAACf9gAAAACP9gADvv7v9gA//CKv9gC/8wCf9gD/8ACf9gL/4ACf9gL/4ACf9gD/8ACf9gDP8wCf9gBP/DTP9gAEz/yf/l'),
-        101: (9.33, 0, 9, 9, 10, 'AFz/xABf9G/zDv0B/5L/wA/7T////8T/wREQL/wAAADv8QAABf/FRkAEv/2j'),
-        102: (7, 0, 4, 8, 15, 'AAnv4gCv48MC/6BBBf+QAAb/kACv//+ABv+RAAb/kAAG/5AABv+QAAb/kAAG/5AABv+QAAb/kABe//wQ'),
-        103: (10.5, 0, 8, 11, 15, 'AAAAAFkAB97+7zAL/zLf4QL/wAj/UB/8AI/1AM/zLf4AAb//6RAAHlAAAAAM+QAAAADv///rMAb/////EF6Hd5/zT7AAAP8U/lIkv4AFvv/qQAA='),
-        104: (11.67, 0, 4, 12, 15, 'Xv9wAAAACP9wAAAACP9wAAAACP9wAAAACP9wAAAACP92z+YACP/Xj/8gCP9wC/9QCP9wCf9gCP9wCf9gCP9wCf9gCP9wCf9gCP9wCf9gCP9wCf9gXv/kT//k'),
-        105: (5.83, 0, 3, 6, 16, 'AAAAA/8wCP9wAu0gAAAAAAAAXv9wCP9wCP9wCP9wCP9wCP9wCP9wCP9wCP9wbv/m'),
-        106: (7, -1, 3, 7, 20, 'AAABAAAu9AAG/5AAHeMAAAAAAAAAAM//kABv+QAG/5AAb/kABv+QAG/5AAb/kABv+QAG/5AAb/kABv+BQI/1LT39Au/pEA=='),
-        107: (11.67, 0, 4, 12, 15, 'Xv9wAAAACP9wAAAACP9wAAAACP9wAAAACP9wAAAACP9wCf+gCP9wBPQACP9wP1AACP9y6gAACP+N/yAACP/8/6AACP+Q3/QACP9wT/0ACP9wC/9wTv/kDf/4'),
-        108: (5.83, 0, 4, 6, 15, 'b/9gCP9gCP9gCP9gCP9gCP9gCP9gCP9gCP9gCP9gCP9gCP9gCP9gCP9gf//l'),
-        109: (17.5, 0, 9, 18, 10, 'Xv9mz+YX39QACP/Yn/+3r/4ACP9wDP9ADv8QCP9wCv9QDP8gCP9wCv9QDP8gCP9wCv9QDP8gCP9wCv9QDP8gCP9wCv9QDP8gCP9wCv9QDP8gXv/kX//jj//R'),
-        110: (11.67, 0, 9, 12, 10, 'Xv9mz+YACP/Xj/8gCP9wC/9QCP9wCf9gCP9wCf9gCP9wCf9gCP9wCf9gCP9wCf9gCP9wCf9gXv/kT//k'),
-        111: (10.5, 0, 9, 10, 10, 'AEv/2AAE/2LfwA3/AH/0H/0AX/kv/ABP+i/8AE/6H/0AX/kN/wB/9AT/Yt/AAEz/2AA='),
-        112: (11.67, 0, 9, 11, 14, 'j/+M/7IAr/k0//EK/0AI/4Cv9ABP+wr/QAP/wK/0AD/8Cv9ABP+gr/QAj/UK/3JP/ACv/e/oAAr/QAAAAK/0AAAACv9AAAAI//6AAAA='),
-        113: (11.67, 0, 8, 12, 15, 'AAAAAAIQACrv/d9wAv/CKv9wC/8wCP9wD/8ACP9wH/4ACP9wH/4ACP9wD/8ACP9wDP8gCP9wBP/DO/9wAEz/uv9wAAAACP9wAAAACP9wAAAACP9wAAAAv//l'),
-        114: (9.33, 0, 9, 9, 10, 'Xf+gTNA/+3/+A//9ddA//AAFA//AAAA//AAAA//AAAA//AAAA//AAAXf/8MA'),
-        115: (8.17, 0, 9, 8, 10, 'Aq7+sA7RBvBPwACQT/xhAA3//3ABr//1AAF++VgAB/heUAvyK9/rMA=='),
-        116: (7, 0, 7, 7, 12, 'AE+QAA35AH7//5B/+RAG/5AAb/kABv+QAG/5AAb/kABv+QAD/+VQBt/Z'),
-        117: (11.67, 0, 9, 12, 10, 'j/9Aj/8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gCv9gDP8gB//nj/8gAK7qS//R'),
-        118: (10.5, 0, 9, 11, 10, '3/+wB/9h//EAC4AK/3AC8gAv/gCLAAC/9Q5AAAT/xdAAAA3/1gAAAG//AAAAAO+QAAAACPIAAA=='),
-        119: (15.17, 0, 9, 16, 10, 'z/+gAAAAz9AP/gAD8gAvEAr/QAn4AHsABP+QD/4AxgAA3/Bu/1LwAACP9cPvt6AAAC/90J/9UAAADP9gL/4AAAAG/xAM+QAAAAD6AAX0AAA='),
-        120: (10.5, 0, 9, 11, 10, 'j//lPvwAb/sAyQAAz/WcAAAC//4QAAAI/5AAAAAv/zAAAA2//QAAC7Cv9wAI0AH/8Qv+QJ//5A=='),
-        121: (10.5, 0, 9, 11, 14, 'r//RCv4w7/MADlAH/5AE4AAf/wCpAACv9g8gAAP/xcAAAA3/1gAAAG//AAAAAP+QAAAACfMAAAAAbQAABSAOUAAAijvAAAAG76EAAAA='),
-        122: (9.33, 0, 9, 9, 10, 'L//v/0LRB//AKQDv9AAAf/wAAB7/QAAI/7AAAf/zAHCP+wAsH/8wCLj//v/5'),
-        123: (8.28, 0, 4, 8, 18, 'AAGu9gAL/AAAD/gAAB/4AAAv+AAAL/gAAC/3AABP9QACz8AAT/0gAAC/4QAAP/YAAC/4AAAv+AAAL/gAAA/4AAAM/AAAAa72'),
-        124: (4.62, 1, 4, 3, 19, 'bwbwbwbwbwbwbwbwbwbwbwbwbwbwbwbwbwbwbwA='),
-        125: (8.28, 0, 4, 8, 18, 'LvwwAACP4AAAT/QAAD/2AAA/9gAAP/YAAD/2AAAf+AAACP5AAAC/+AAL/SAAL/cAAD/2AAA/9gAAP/YAAE/1AACP8QAu/DAA'),
-        126: (10.92, 0, 10, 11, 4, 'Bu+RAAyz+5/iAPeeAD75zyywABr+UA=='),
-        183: (7, 1, 10, 5, 3, 'CvoC//IK+gA='),
-        223: (11.67, 0, 4, 12, 15, 'AAjf6zAAAM/Bf/MABf9gD/sACf9ADf8AC/9Af/8gC/9D/3AAC/9H/yAAC/9G/4AAC/9B//UAC/9Ab/9AC/9ACP/QC/9AAM/xC/9MAH/wC/9OQM+wb/9K7+kA'),
-        224: (10.5, 0, 4, 11, 15, 'AC79AAAAABr4AAAAAAXiAAAAAAAAAAAAAAAAABve/qIAAuQC/+AAKgAM/yAAAADP8wAp3u//MA7+IM/zBP+gDP8wT/oAz/MB//Ve/zAE3+mf/SA='),
-        225: (10.5, 0, 4, 11, 15, 'AAAN/iAAAAj6EAAAAuUAAAAAAAAAAAAAAAAAABve/qIAAuQC/+AAKgAM/yAAAADP8wAp3u//MA7+IM/zBP+gDP8wT/oAz/MB//Ve/zAE3+mf/SA='),
-        226: (10.5, 0, 4, 11, 15, 'AAT/sAAAAv/fgAAA2RBdUAAAAAAAAAAAAAAAABve/qIAAuQC/+AAKgAM/yAAAADP8wAp3u//MA7+IM/zBP+gDP8wT/oAz/MB//Ve/zAE3+mf/SA='),
-        228: (10.5, 0, 4, 11, 15, 'ABYQRAAACfov8gAAX3DdAAAAAAAAAAAAAAAAABve/qIAAuQC/+AAKgAM/yAAAADP8wAp3u//MA7+IM/zBP+gDP8wT/oAz/MB//Ve/zAE3+mf/SA='),
-        229: (10.5, 0, 3, 11, 16, 'AALPkAAAALpNUAAAC6TlAAAALPkAAAAAAAAAAAAAAAAAAb3v6iAALkAv/gACoADP8gAAAAz/MAKd7v/zAO/iDP8wT/oAz/ME/6AM/zAf/1Xv8wBN/pn/0g=='),
-        230: (15.17, 0, 9, 15, 10, 'Ab3/1q79cAAuQD//gv+QAqAA3/IL/xAAAA3/AK/0AZ3+/////1Df4gz/EREQP/oAv/EAAAT/oAf/YAAAH/9Vzv90VwBN/qMZ3/xw'),
-        231: (9.33, 0, 9, 9, 14, 'ACnv7WAu/CK5DP8gBZH/0AABP/sAAAT/sAAAL/0AAADf8gAABP/mRWACrv7FAADGAAAAD/kAAAEu8QAB3+cA'),
-        232: (9.33, 0, 4, 9, 15, 'AJ/1AAAAXuEAAAAbkAAAAAAAAAAAAAAFz/xABf9G/zDv0B/5L/wA/7T////8T/wREQL/wAAADv8QAABf/FRkAEv/2jA='),
-        233: (9.33, 0, 4, 9, 15, 'AAAO/SAACfoAAAPlAAAAAAAAAAAAAAAFz/xABf9G/zDv0B/5L/wA/7T////8T/wREQL/wAAADv8QAABf/FRkAEv/2jA='),
-        234: (9.33, 0, 4, 9, 15, 'AAn/YAAG/e9AA+YBjRAAAAAAAAAAAAAFz/xABf9G/zDv0B/5L/wA/7T////8T/wREQL/wAAADv8QAABf/FRkAEv/2jA='),
-        235: (9.33, 0, 4, 9, 15, 'ADUAYQAP9J+wAL4V9wAAAAAAAAAAAAAFz/xABf9G/zDv0B/5L/wA/7T////8T/wREQL/wAAADv8QAABf/FRkAEv/2jA='),
-        236: (5.83, -1, 4, 7, 15, 'DP8gAAj7AAAD1QAAAAAAAAAAXv9wAI/3AAj/cACP9wAI/3AAj/cACP9wAI/3AAj/cAbv/mA='),
-        237: (5.83, 0, 4, 7, 15, 'AC/8AAz3AAbTAAAAAAAAAAAF7/cACP9wAI/3AAj/cACP9wAI/3AAj/cACP9wAI/3AG7/5gA='),
-        238: (5.83, -1, 4, 8, 15, 'AI/3AAX+70AucAfiAAAAAAAAAAAF7/cAAI/3AACP9wAAj/cAAI/3AACP9wAAj/cAAI/3AACP9wAG7/5g'),
-        239: (5.83, 0, 4, 6, 15, 'JgBi72f9njPpAAAAAAAAXv9wCP9wCP9wCP9wCP9wCP9wCP9wCP9wCP9wbv/m'),
-        241: (11.67, 0, 4, 12, 15, 'AAj9ULUAAC/f/fIAAGsF34AAAAAAAAAAAAAAAAAAXv9mz+YACP/Xj/8gCP9wC/9QCP9wCf9gCP9wCf9gCP9wCf9gCP9wCf9gCP9wCf9gCP9wCf9gXv/kT//k'),
-        242: (10.5, 0, 4, 10, 15, 'AG/4AAAAA98wAAAACcAAAAAAAAAAAAAAAABL/9gABP9i38AN/wB/9B/9AF/5L/wAT/ov/ABP+h/9AF/5Df8Af/QE/2LfwABM/9gA'),
-        243: (10.5, 0, 4, 10, 15, 'AAAM/jAAAG+xAAAB5wAAAAAAAAAAAAAAAABL/9gABP9i38AN/wB/9B/9AF/5L/wAT/ov/ABP+h/9AF/5Df8Af/QE/2LfwABM/9gA'),
-        244: (10.5, 0, 4, 10, 15, 'AAT/sAAAL/34AADZEF1QAAAAAAAAAAAAAABL/9gABP9i38AN/wB/9B/9AF/5L/wAT/ov/ABP+h/9AF/5Df8Af/QE/2LfwABM/9gA'),
-        246: (10.5, 0, 4, 10, 15, 'ABYQRAAAn6L/IABfYd0AAAAAAAAAAAAAAABL/9gABP9i38AN/wB/9B/9AF/5L/wAT/ov/ABP+h/9AF/5Df8Af/QE/2LfwABM/9gA'),
-        248: (10.5, 0, 8, 10, 12, 'AAAAAMcAS//a4AT/Yd/ADf8Av/Qf/QX/+S/8Hp/6L/y4T/of/9Bf+Qz/MH/0BP9i38AG2+/YAB5AAAAA'),
-        249: (11.67, 0, 4, 12, 15, 'AB3+EAAAAACfkAAAAAAF4wAAAAAAAAAAAAAAAAAAj/9Aj/8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gCv9gDP8gB//nj/8gAK7qS//R'),
-        250: (11.67, 0, 4, 12, 15, 'AAAF/5AAAAAe5QAAAACbEAAAAAAAAAAAAAAAAAAAj/9Aj/8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gCv9gDP8gB//nj/8gAK7qS//R'),
-        251: (11.67, 0, 4, 12, 15, 'AAC/9AAAAAj9/yAAAF1QGdAAAAAAAAAAAAAAAAAAj/9Aj/8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gCv9gDP8gB//nj/8gAK7qS//R'),
-        252: (11.67, 0, 4, 12, 15, 'AARQFhAAAB/zn6AAAAzRX3AAAAAAAAAAAAAAAAAAj/9Aj/8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gC/9ADP8gCv9gDP8gB//nj/8gAK7qS//R'),
-        253: (10.5, 0, 4, 11, 19, 'AAAG/4AAAAHuQAAAAKsQAAAAAAAAAAAAAAAACv/9EK/jDv8wAOUAf/kATgAB//AKkAAK/2DyAAA//FwAAADf/WAAAAb/8AAAAA/5AAAAAJ8wAAAABtAAAFIA5QAACKO8AAAAbvoQAAAA'),
-        255: (10.5, 0, 4, 11, 19, 'AAUwNgAABf4O9gAALqCuMAAAAAAAAAAAAAAACv/9EK/jDv8wAOUAf/kATgAB//AKkAAK/2DyAAA//FwAAADf/WAAAAb/8AAAAA/5AAAAAJ8wAAAABtAAAFIA5QAACKO8AAAAbvoQAAAA'),
-        339: (15.17, 0, 9, 15, 10, 'AH3/sl3/sgCf4l//wa/hL/oA7/YG/3b/gAz/UF/6f/gAv////6f/gAv/YREQX/gAz/YAAAH/oA7/sAAACf4l/v+lRiAH3/oirv2R'),
-        8211: (10.5, -1, 13, 12, 2, 'L//////6F3d3d3d0'),
-        8212: (21, -1, 13, 23, 2, 'L/////////////8hd3d3d3d3d3d3d3E='),
-        8216: (7, 1, 5, 5, 6, 'ABiwPoEO0AT/oE//QJ/B'),
-        8217: (7, 1, 5, 5, 6, 'C/sB//YI/2AL8QflCZIA'),
-        8220: (10.5, 1, 5, 9, 6, 'AGwwGLDMME+BnzAO0A79JP+Q7/pP/zXuQK/B'),
-        8221: (10.5, 0, 5, 10, 6, 'Be5Ar7EK/+D/9wLf4H/3AD+QCvIDywBvYDxQCKMA'),
-        8230: (21, 1, 16, 19, 3, 'C/kAAK+gAAn7A//xAC//IAD/8wv5AACvoAAJ+wA='),
-        8722: (11.97, 1, 11, 10, 2, '7/////5nd3d3dg=='),
-        9642: (7.44, 1, 10, 6, 5, '7//17//17//17//17//1'),
-    },
-    ('serif_b', 13): {
-        32: (3.25, 0, 0, 0, 0, ''),
-        33: (4.33, 1, 3, 3, 9, 'zwrwjQfAWgSQAArhrhA='),
-        34: (7.22, 1, 3, 5, 3, 'fwy10JgqB1A='),
-        35: (6.5, 0, 3, 7, 9, 'ANE7AB0HcK3s/UB3DRAJQOAK/N7EDgWQAdB3ADoJQAA='),
-        36: (6.5, 0, 2, 7, 11, 'AAkAAHzcYE8ZKAbzkAAv/TAAXv9wABzvBACU8YQJbQXL2yAACQAA'),
-        37: (13, 1, 3, 11, 9, 'HKoAA7AIwPUAwgCrDnCGAAjA9TsAABy6DCm8IAAIY/GqAAOwXwnAAMED8aoAhgAJvCA='),
-        38: (10.83, 0, 3, 11, 9, 'AF28EAAAD4D4AAAA+h9wAAAJ/ZAAAAPe9Qv4AOsL9p0AP4AL/1AB/AAe+AAEzKtq+hA='),
-        39: (3.61, 1, 3, 2, 3, '6MWT'),
-        40: (4.33, 0, 3, 4, 12, 'ABkB5AvAH3BfUG9Ab0BPUB9wC8AB5AAZ'),
-        41: (4.33, 0, 3, 4, 12, 'dAAeUAfxAvcA+gD7APsA+gL3B/EeUHQA'),
-        42: (6.5, 0, 3, 6, 5, 'Am4CT3u8Bu+yT3u8Am4C'),
-        43: (7.41, 0, 5, 7, 6, 'AAwgAADCAE7v7qAAwgAADCAAAFEA'),
-        44: (3.25, 0, 10, 3, 4, 'X2PrC2hg'),
-        45: (4.33, 0, 8, 4, 2, 'j/0BEQ=='),
-        46: (3.25, 0, 10, 3, 2, 'P3P3'),
-        47: (3.61, -1, 3, 5, 9, 'AASQAKQADQAEkACkAA0ABJAApAANAAA='),
-        48: (6.5, 0, 3, 6, 9, 'BNygDpH3T2D8f1Dvf1Dff2DvT2D8DpL3BNyg'),
-        49: (6.5, 1, 3, 5, 9, 'BvUJz1AH9QB/UAf1AH9QB/UAf1Cd/HA='),
-        50: (6.5, 0, 3, 6, 9, 'La2hKAP5AQH7AAP4AArhAF4gBMEAPod2f///'),
-        51: (6.5, 0, 3, 7, 9, 'LK2gA3BfgAED+QAAn0AAz6EAAB/AIADfB0AfwFutsgA='),
-        52: (6.5, 0, 3, 7, 9, 'AAT2AADfYACY9gA6T2AMFPYIlI+R3///QABPYAAE9gA='),
-        53: (6.5, 0, 3, 7, 9, 'D//2AMZmIAoAAADK2yAAAvsAAA7wIADvB0AvoFytoQA='),
-        54: (6.5, 0, 3, 7, 9, 'AbvHAMsBkE9gAQf93TCPUP0H9QzxX3DPAOoOwAPbwgA='),
-        55: (6.5, 0, 3, 7, 9, 'T///JLZowBIAlgAAHgAACKAAAOMAAH0AAA5wAAbxAAA='),
-        56: (6.5, 0, 3, 7, 9, 'B9uyA/gPsF9w/QHqL4AI7OIE9Q3Aj0DPBvUN0AnbwwA='),
-        57: (6.5, 0, 3, 7, 9, 'B8ygBPYfgJ9A/QnzDfBfYN8Anr/wEAD7BWBPUE2sYAA='),
-        58: (4.33, 1, 6, 3, 6, 'vQvQAAAAvQvQ'),
-        59: (4.33, 0, 6, 4, 8, 'CtEL4QAAAAAM0QnzA9A5EA=='),
-        60: (7.41, 0, 4, 7, 7, 'AAAFgABMkQTKIAT1AAADyiAAAEyRAAAFgA=='),
-        61: (7.41, 0, 6, 7, 4, 'Xu7ukAAAAAAAAAXu7uo='),
-        62: (7.41, 0, 4, 7, 7, 'SBAAAG1wAAAH1gAAAdkAB9YAbXAASBAAAA=='),
-        63: (6.5, 0, 3, 6, 9, 'LK2hNwP4AAL6ABr2AN6AAKMAAAAAAeoAAeoA'),
-        64: (12.09, 0, 3, 12, 11, 'AAGKqrYAAE1AAAqwAuIAAADzC3AZv4DGHxHjT0DUPgnQjwHQTQzA3QowLwj5zpIADWAAAAAAA+QAAYIAACm6qSAA'),
-        65: (9.39, 0, 3, 10, 9, 'AAb8AAAAC98gAAAZf4AAAHMf4AAAsAvzAAPLvPkACCAB/wAMAADPUJ1gBN/S'),
-        66: (8.67, 0, 3, 9, 10, 'bvy+kAC/UJ+AC/UH+QC/UL8gC/y+ogC/UB/xC/UA30C/UA/xbvytwwAAAAAA'),
-        67: (9.39, 0, 3, 9, 9, 'AFzbuyB/kAB0D/AAAhT9AAAAX8AAAAT9AAAAD/EAASBvoABWAFzaqzA='),
-        68: (9.39, 0, 3, 9, 10, 'bfzekQCvUE/hCvUAr3CvUAb6CvUAX7CvUAb6CvUAj3CvUA7hbfy9ogAAAAAA'),
-        69: (8.67, 0, 3, 8, 9, 'bvy71wv1ADcL9QABC/UFQAv8vUAL9QMwC/UAAwv1AAtu/Lu+'),
-        70: (7.94, 0, 3, 8, 9, 'bvy71Qv1AFUL9QAAC/UIIAv8viAL9QYQC/UAAAv1AABe+2AA'),
-        71: (10.11, 0, 3, 10, 9, 'AEvbvFAG+QADoA7wAABAT9AAAABfwAAAAE/QAZ/2DvEAH+AF+gAf4ABLyryA'),
-        72: (10.11, 0, 3, 10, 9, 'bvsyr+cL9QA/wAv1AD/AC/UAP8AL/LvPwAv1AD/AC/UAP8AL9QA/wG77Mq/n'),
-        73: (5.06, 0, 3, 5, 9, 'TP1Qf4AH+AB/gAf4AH+AB/gAf4BM/VA='),
-        74: (6.5, 0, 3, 7, 9, 'AH76EADfMAAN8wAA3zAADfMAAN8wAA3xBjDtAF27IAA='),
-        75: (10.11, 0, 3, 11, 9, 'bvswX5IAv1AKUAAL9QtQAAC/XLAAAAv+/2AAAL9V/yAAC/UJ/QAAv1AN+QBu+0Av+QA='),
-        76: (8.67, 0, 3, 9, 9, 'bvtAAAC/UAAAC/UAAAC/UAAAC/UAAAC/UAAAC/UABAC/UADAbvyqvgA='),
-        77: (12.27, 0, 3, 12, 9, 'bvwAAL/nC+8gAu/AC4+QCY/ACy/wDT/ACxn2Zz/ACxL9wT/ACxDPoD/ACxBfMD/AbpELAq/n'),
-        78: (9.39, 0, 3, 10, 9, 'bfgAbZEK/zAKIApv0AogCij5CiAKIN9aIAogL+wgCiAG/yAKIAC/IG2iAB4g'),
-        79: (10.11, 0, 3, 10, 9, 'AGy7xwAI9gBPoB/gAA3yT8AACvZfwAAK90/AAAr2H/AADfIH9gBPkABsu8cA'),
-        80: (7.94, 0, 3, 8, 9, 'bvzNYAv1CvUL9Qf4C/UL9Qv8zXAL9QAAC/UAAAv1AABe+2AA'),
-        81: (10.11, 0, 3, 10, 11, 'AGy7xwAI9gBPoB/gAA3yT8AACvZfwAAK90/AAAr2D/AADfIH9gBPkABsu/gAAAAJ/AAAAACf1Q=='),
-        82: (9.39, 0, 3, 10, 9, 'bvy9ogAL9QL9AAv1AP8AC/UG+gAL/N+gAAv1P9AAC/UK9wAL9QH/EF77MI/E'),
-        83: (7.23, 0, 3, 7, 9, 'BMrNEfUAoT8wAgDtYQAD3/kAAEv3EQANpXAA5jy6uAA='),
-        84: (8.67, 0, 3, 9, 9, 'y678vXoAv1A3MAv1ACAAv1AAAAv1AAAAv1AAAAv1AAAAv1AAAI77UAA='),
-        85: (9.39, 0, 3, 10, 9, 'XvsgbpAL9AALEAv0AAsQC/QACxAL9AALEAv0AAsQCfUACwAE/BBKAABc/ZEA'),
-        86: (9.39, 0, 3, 10, 9, 'j/cALLEM9QALEAb7ABsAAO8gdAAAn4DAAAAv5IAAAAv+IAAABfsAAAAA5QAA'),
-        87: (13, 0, 3, 13, 9, 'f/kAAACPYM9ABsACwAf6AM8wZwAf8C/5CyAAz1lv8dAAB/vQr6kAAB/4BP9AAADPIA3wAAAGsAB6AAA='),
-        88: (9.39, 0, 3, 10, 9, 'PP5RrWAB7yCyAABvt2AAAAz7AAAABP4AAAAKv4AAAHcO8gADsAX7AG6hB/+h'),
-        89: (9.39, 0, 3, 10, 9, 'bv1AbpEF/gAsAADPYKQAAE/iwAAADP5AAAAE/QAAAAP8AAAAA/wAAABK/oEA'),
-        90: (8.67, 0, 3, 8, 9, 'D7qu+AoAP/ECAM9wAAb9AAAf8wAAr5AABP4QBA31AAtf+qvN'),
-        91: (4.33, 0, 3, 4, 11, 'D/oPkA+QD5APkA+QD5APkA+QD5AP+g=='),
-        92: (3.61, -1, 3, 5, 9, 'DQAApAAEkAANAACkAAWQAA0AAKQABZA='),
-        93: (4.33, 0, 3, 4, 11, 'XvUD9QP1A/UD9QP1A/UD9QP1A/Ve9Q=='),
-        94: (7.55, 0, 3, 7, 7, 'AAtAAAHKAAB1sQAMBmAEkBwAowCjDQAEkA=='),
-        95: (6.5, -1, 13, 8, 1, 'Hu7u6A=='),
-        96: (4.33, 0, 3, 4, 2, 'LqABsw=='),
-        97: (6.5, 0, 6, 7, 6, 'CpzTAAAvoBra+wf1L7CPUvsC3Z/S'),
-        98: (7.23, 0, 3, 7, 9, 'j5AAA/kAAD+QAAP8nrA/kG9z+QL6P5A/k/kG9SvK1wA='),
-        99: (5.77, 0, 6, 6, 6, 'BtrDP5BEj1AAf1AAP6AABt20'),
-        100: (7.23, 0, 3, 8, 9, 'AAC/cAAAb3AAAG9wBtrPcC+gb3BvYG9wb2BvcD+gb3AH67+w'),
-        101: (5.77, 0, 6, 6, 6, 'CMygT1X1j8qkf1AAT5AAB+yi'),
-        102: (4.33, 0, 3, 5, 9, 'A9xg3gMP0Aj/oA/QAP0AD9AA/QBf5gA='),
-        103: (6.5, 0, 5, 7, 10, 'AAAFAJzOoG9Q+wb1D7AM28IB4gAAT//7AciK9ZoALzLLvFA='),
-        104: (7.23, 0, 3, 8, 9, 'X8AAAB/AAAAfwAAAH9n9EB/Aj2AfwG9wH8BvcB/Ab3Bf4q+w'),
-        105: (3.61, 0, 3, 4, 9, 'DYANkAAAX8AfwB/AH8AfwG/j'),
-        106: (4.33, -1, 3, 5, 12, 'AD5ABPUAAAA79wBvcAb3AG9wBvcAb3AG9gN/Md2A'),
-        107: (7.23, 0, 3, 8, 9, 'X8AAAB/AAAAfwAAAH8BOUB/AowAfytAAH/r4AB/A3yBf4o/B'),
-        108: (3.61, 0, 3, 4, 9, 'b7AfsB+wH7AfsB+wH7AfsG/i'),
-        109: (10.83, 0, 6, 11, 6, 'X9n8a/gB/An2DvAfwH9g3wH8B/YN8B/Af2DfBf4r+y71'),
-        110: (7.23, 0, 6, 8, 6, 'X9n9EB/Aj2AfwG9wH8BvcB/Ab3Bf4q+w'),
-        111: (6.5, 0, 6, 6, 6, 'B8uyP3D7f2Duf2DuP3D7B9uy'),
-        112: (7.23, 0, 6, 7, 9, 'j8rqA/oG9z+gP6P6A/k/oG9T/a2AP6AAA/oAAI/TAAA='),
-        113: (7.23, 0, 5, 8, 10, 'AAAAAAbbz3AvoG9wb2BvcG9gb3A/kG9wB+uvcAAAX3AAAG9wAAG/sA=='),
-        114: (5.77, 0, 6, 6, 6, 'X+PXDvp3DvABDvAADvAAX/cA'),
-        115: (5.06, 0, 6, 5, 6, 'K6xIwCNv6QBc+YAJp8my'),
-        116: (4.33, 0, 5, 5, 7, 'CNAG/6AP0AD9AA/QAP4ACPsg'),
-        117: (7.23, 0, 6, 7, 6, 'j6DPQ/oI9D+gj0P6CPQvwI9Av6v5'),
-        118: (6.5, 0, 6, 7, 6, 'v7A+QvwCoAvzgwA/uwAAz1AABeAA'),
-        119: (9.39, 0, 6, 10, 6, 'v6AABeIvoEwDgAzwz0kgBvqvuwAA/xr2AACZAvEA'),
-        120: (6.5, 0, 6, 7, 6, 'f+KrEK9rAAHvIAAL+QAJS/MJ0H/T'),
-        121: (6.5, 0, 6, 7, 9, 'r8FOIf0DgAr0kgA/ugAAz1AABeAAADgABQogAJtgAAA='),
-        122: (5.77, 0, 6, 6, 6, 'e6/xYH+AAf4ACfcBH+Amn8nV'),
-        123: (5.12, 0, 3, 5, 11, 'AJ1QL2AD9gA/YAjyBeoABfQAP2AD9gAvcACdUA=='),
-        124: (2.86, 0, 3, 2, 12, 'Dg4ODg4ODg4ODg4O'),
-        125: (5.12, 0, 3, 5, 11, 'TLAAT0AE9QBPUAHqAAj2AvcAT1AE9QBfQEygAA=='),
-        126: (6.77, 0, 6, 7, 2, 'TtcGjCGe0Q=='),
-        183: (4.33, 1, 7, 3, 2, 'rhrh'),
-        223: (7.23, 0, 3, 7, 9, 'A8rEAOsJ4C+i7zP6jxA/p/cD+g31P6Av0/pgzX+rrUA='),
-        224: (6.5, 0, 3, 7, 9, 'AtsAAAClAAAAAACpzTAAAvoBra+wf1L7CPUvsC3Z/SA='),
-        225: (6.5, 0, 3, 7, 9, 'AA6wAAiAAAAAAACpzTAAAvoBra+wf1L7CPUvsC3Z/SA='),
-        226: (6.5, 0, 3, 7, 9, 'AM9AAIc7EAAAAACpzTAAAvoBra+wf1L7CPUvsC3Z/SA='),
-        228: (6.5, 0, 3, 7, 9, 'AlFgAGxNAAAAAACpzTAAAvoBra+wf1L7CPUvsC3Z/SA='),
-        229: (6.5, 0, 2, 7, 10, 'AJxAAAwpAACcQAAAAAAKnNMAAC+gGtr7B/UvsI9S+wLdn9I='),
-        230: (9.39, 0, 6, 9, 6, 'Cpy9vCAAP6D7Gtr9qpf1L5AAj1D+EALdlc61'),
-        231: (5.77, 0, 6, 6, 9, 'BtrDP5BEj1AAf1AAP6AABt20AH4gAB5gAv0Q'),
-        232: (5.77, 0, 3, 6, 9, 'BfYAACwAAAAACMygT1X1j8qkf1AAT5AAB+yi'),
-        233: (5.77, 0, 3, 6, 9, 'AA6wAIcAAAAACMygT1X1j8qkf1AAT5AAB+yi'),
-        234: (5.77, 0, 3, 6, 9, 'Ae8gC1WwAAAACMygT1X1j8qkf1AAT5AAB+yi'),
-        235: (5.77, 0, 3, 6, 9, 'BDNACYigAAAACMygT1X1j8qkf1AAT5AAB+yi'),
-        236: (3.61, -1, 3, 5, 9, 'CvEAB5AAAABfwAH8AB/AAfwAH8AG/jA='),
-        237: (3.61, 0, 3, 4, 9, 'BfYMMAAAX8AfwB/AH8AfwG/j'),
-        238: (3.61, -1, 3, 5, 9, 'A/0BtHkAAABfwAH8AB/AAfwAH8AG/jA='),
-        239: (3.61, 0, 3, 4, 9, 'UkPGqAAAX8AfwB/AH8AfwG/j'),
-        241: (7.23, 0, 3, 8, 9, 'AdxKAAVp9gAAAAAAX9n9EB/Aj2AfwG9wH8BvcB/Ab3Bf4q+w'),
-        242: (6.5, 0, 3, 6, 9, 'BOgAABwgAAAAB8uyP3D7f2Duf2DuP3D7B9uy'),
-        243: (6.5, 0, 3, 6, 9, 'AA3BAHkAAAAAB8uyP3D7f2Duf2DuP3D7B9uy'),
-        244: (6.5, 0, 3, 6, 9, 'AM9ACHOxAAAAB8uyP3D7f2Duf2DuP3D7B9uy'),
-        246: (6.5, 0, 3, 6, 9, 'AlFgBsTQAAAAB8uyP3D7f2Duf2DuP3D7B9uy'),
-        248: (6.5, 0, 5, 6, 8, 'AAALB8zWP3L7f2rub9TuP6D7DduyVwAA'),
-        249: (7.23, 0, 3, 7, 9, 'AdwAAACWAAAAAAj6DPQ/oI9D+gj0P6CPQvwI9Av6v5A='),
-        250: (7.23, 0, 3, 7, 9, 'AAnjAAOxAAAAAAj6DPQ/oI9D+gj0P6CPQvwI9Av6v5A='),
-        251: (7.23, 0, 3, 7, 9, 'AH+gADs5YAAAAAj6DPQ/oI9D+gj0P6CPQvwI9Av6v5A='),
-        252: (7.23, 0, 3, 7, 9, 'AGBhAB4tQAAAAAj6DPQ/oI9D+gj0P6CPQvwI9Av6v5A='),
-        253: (6.5, 0, 3, 7, 12, 'AArjAAOxAAAAAAr8FOIf0DgAr0kgA/ugAAz1AABeAAADgABQogAJtgAA'),
-        255: (6.5, 0, 3, 7, 12, 'AWBgAD4uEAAAAAr8FOIf0DgAr0kgA/ugAAz1AABeAAADgABQogAJtgAA'),
-        339: (9.39, 0, 6, 10, 6, 'CcyLrVBvQ/0M8K8i/qqgryL8AABvQ/8gAAnMeNxw'),
-        8211: (6.5, -1, 9, 8, 1, 'Hu7u6A=='),
-        8212: (13, -1, 9, 15, 1, 'Hu7u7u7u7hA='),
-        8216: (4.33, 1, 3, 3, 4, 'CFlw7Rri'),
-        8217: (4.33, 0, 3, 4, 4, 'CuIH9QHhGiA='),
-        8220: (6.5, 0, 3, 7, 4, 'ApI6AeEuAF+H9gLrPoA='),
-        8221: (6.5, 0, 3, 6, 4, 'HrPpDPLdBrCIWAaA'),
-        8230: (13, 1, 10, 11, 2, 'rRBfUA274QX1ANs='),
-        8722: (7.41, 0, 7, 7, 1, 'Tu7uoA=='),
-        9642: (4.61, 0, 6, 4, 3, 'X/5f/l/+'),
-    },
-    ('sans_b', 20): {
-        32: (5.56, 0, 0, 0, 0, ''),
-        33: (6.66, 1, 5, 4, 14, 'H/sP+w/6D/oP+Q74DvgN9w33AAAAAB/7H/sf+w=='),
-        34: (9.48, 1, 5, 8, 5, 'r/B/8p/gf/GP0G/wj8Bf8H+wT+A='),
-        35: (11.12, 0, 5, 11, 14, 'AAH2AJ4AAF8gDbAACPAA+AAAvAA/QC//////wXj6d951AF8gDaAACPAA9wAAvAA/QAr/////9En5d953IF8gDaAACeAB9gAA2wBfMAA='),
-        36: (11.12, 0, 3, 11, 18, 'AAAEAAAAAADiAAAAbP/8YACf////kB/6Djv/JP9A4j7EP/kOIAAA3/32AAAD7///kQAAa///4QAADlr/kAAA4g38bNAOIM/F/6Ljf/kK/////hAGzv/YEAAADiAAAAAAoQAA'),
-        37: (17.78, 0, 5, 18, 14, 'Ar/6EAAA7yAADfq/wAAJ9wAAT9AO8gA/wAAAf6AM9QDfIAAAf5AL9gj4AAAAf6AM9S/Uz+kAT9AO8s9f+c+QDfu/t/lvsB/wAr/6P+CfgA7yAAAAv0CvcA3zAAAG+gCfgA7yAAAe4QBvsB/wAACvUAAe+s+QAAT7AAADz+kA'),
-        38: (14.44, 0, 5, 14, 14, 'AAA778UAAAAC/8v/QAAABvwAn5AAAAf6AL+QAAAF/Sr/IAAAAP//wgAAACv/9QBrUALv//cAv4AM/if/Mv8wD/cAz+v8AB/3AB3/8wAN/iAK//kiBf/+//3//QA67+owbOo='),
-        39: (4.75, 1, 5, 3, 5, '773635z4v3A='),
-        40: (6.66, 1, 4, 6, 19, 'AG/1Ae/ACP8wDvwAX/YAj/IAz/AA79AA/8AA/7AA/8AA79AAz/AAj/IAT/YADv0ACP8wAe/AAG/1'),
-        41: (6.66, 0, 4, 6, 19, 'v/EAL/oACf8gAv+QAM/wAI/zAE/2AC/4AB/5AB/6AB/5AC/4AE/2AI/zAM/wAv+QCf8gL/oAv/EA'),
-        42: (7.78, 0, 5, 8, 7, 'AB/wACEP4CGfr+v3a//+pQLv/AAe9p+wBrAMQA=='),
-        43: (11.69, 0, 7, 11, 11, 'AABP4AAAAAT/AAAAAE/wAAAABP8AAC//////4v/////+AzNv8zMgAAT/AAAAAE/wAAAABP8AAAAAAiAAAA=='),
-        44: (5.56, 1, 16, 4, 6, 'n/Of85/zBvIL4F9w'),
-        45: (6.66, 0, 13, 6, 3, 'P//9P//9FmZl'),
-        46: (5.56, 1, 16, 4, 3, 'r/Ov86/z'),
-        47: (5.56, 0, 4, 6, 15, 'AA/0AD/xAG/gAJ+wAM+AAP9QA/8gBv8ACfwADPkAD/YAL/MAX/AAj9AAv6AA'),
-        48: (11.12, 0, 5, 11, 14, 'ABjf6RAADP///RAH/4N/+ADP0ADP4A/6AAn/Ef+QAI/zL/gAB/9C/4AAf/Qv+QAI/zD/oACf8Qz+AA39AG/4OP9wAM///8AAAI7+kQA='),
-        49: (11.12, 1, 5, 10, 14, 'AE3/YAA8//9gAK/q/2AAhwX/YAAABf9gAAAF/2AAAAX/YAAABf9gAAAF/2AAAAX/YAAABf9gAAAF/2AAv/////m/////+Q=='),
-        50: (11.12, 0, 5, 11, 14, 'ACrf60AAP////1AM/3N//gDvsADP8QAAAAz/AAAABP+wAAAE//IAAAb/9QAACP/kAAAI/9IAAAX/wQAAAO/1RERBT/////9V//////U='),
-        51: (11.12, 0, 5, 11, 14, 'ADrv2jAAX////1AO/2OP/QPekADf8AAAAA3+AAACOf9gAAD//FAAAA//+iAAABJv/QAAAAB/9F3mAAj/U//2Rv/yCP////kABL7+tQA='),
-        52: (11.12, 0, 5, 12, 14, 'AAAD//MAAAAN//MAAACP//MAAAL/j/MAAAz3b/MAAH/Af/MAAv8wf/MAC/gAf/MAb9AAf/MAv//////wv//////wAAAAf/MAAAAAf/MAAAAAf/MA'),
-        53: (11.12, 0, 5, 11, 14, 'CP////wAn////8AK/wAAAAC/4AAAAAz9AAAAAN/Y79cADv////oA//hH//MBEQAH/3AAAABP+D3oAAf/YP/2Nv/xBf////YAA67+swA='),
-        54: (11.12, 0, 5, 11, 14, 'AAbP6yAACv///yAF/7Nv+gC/4AC9oA/5AAAAAv9379cAP/7///gE//YU7/E/+wAI/1H/oABv9g3+AAj/QH/6Nv/gAL////UAAH3/tAA='),
-        55: (11.12, 0, 5, 11, 14, 'L/////9C//////QERERK/xAAAAL/cAAAAM/QAAAAb/QAAAAO/AAAAAf/QAAAAO/QAAAAX/gAAAAK/zAAAADf8AAAAA/8AAAAAf+wAAA='),
-        56: (11.12, 0, 5, 11, 14, 'ADvv60AAT////2AN/0Av/wD/0AC/8g79AAv/AI/1BP+gAI7//5AAG////DAN/iAc/xT/gABv9l/4AAb/cv/iAd/0CP////oABb7/xgA='),
-        57: (11.12, 0, 5, 11, 14, 'ADrv6RAAX////hAO/3OP+QP/oADP8E/4AAn/I/+gAK/0D/9RX/9Qf///7/UAbf6G/0AAAACP8QraAA39AK/2Ov9gAv///7AAA779cAA='),
-        58: (6.66, 1, 8, 4, 11, 'H/sf+x/7AAAAAAAAAAAAAB/7H/sf+w=='),
-        59: (6.66, 1, 8, 4, 14, 'H/wf/B/8AAAAAAAAAAAAAB/8H/wf+wDaAvYL4Q=='),
-        60: (11.69, 0, 7, 11, 11, 'AAAAABewAAAEr/4AAY7//FBb//+SAC//xgAAAv9gAAAAL//GAAAAW///kgAAAY7//FAAAASv/gAAAAAXsA=='),
-        61: (11.69, 0, 9, 11, 6, 'L//////S//////0CIiIiIiAiIiIiIi//////0v/////9'),
-        62: (11.69, 0, 7, 11, 11, 'K1AAAAAC/+kgAAAH7//GAAAAS///kwAAAY7/4AAAAAn+AAABjv/gAEv//5MH7//GAAL/6SAAACtQAAAAAA=='),
-        63: (12.22, 0, 5, 12, 14, 'AAff/ZEAAd////8wCv+0Sf/ADv0AAN/wAAAAAM/wAAAABP+wAAAAb/4gAAAH/8EAAAA/+gAAAACP8QAAAAAAAAAAAAC/8QAAAAC/8QAAAAC/8QAA'),
-        64: (19.5, 1, 5, 18, 17, 'AAACjO/tkwAAAACf+oZ576EAABz3AAAABvwAAM4wAAAAAE+ACPQAO++R9grgH6AF/Gbc8wXybzAfsAAv4AP0rgB/IAAPsAP0zAC+AAA/cAXy2wDcAACvMArQvQC+AATvEE9gnwBfxo5viPsAT2AH37MK/XAADOEAAAAAAAAAAu5AAAAAbAAAACz9h3i/+hAAAABa3/63EAAA'),
-        65: (14.44, 0, 5, 14, 14, 'AAAK//EAAAAAD//3AAAAAG/8/QAAAAC/xf8gAAAB/3D/gAAAB/8Qr+AAAA38AF/zAAAv9gAP+QAAj/////4AAO//////UAP/giIj/6AJ/yAAAL/wDv0AAABv9l/4AAAAH/s='),
-        66: (14.44, 1, 5, 13, 14, 'r////9gQCv/////+IK/1IiTP+Qr/MAAD/7Cv8wAAT/kK/2REbf8gr/////wgCv/u7v/+QK/zAAAt/yr/MAAAb/av8wAACP96/1IiNv/zr//////5Cv////61AA=='),
-        67: (14.44, 0, 5, 14, 14, 'AABr7/xwAAAt/////RAB7/1kbP/QCP+wAACv9g3/IAAAHZMf/QAAAAAAL/sAAAAAAC/7AAAAAAAP/QAAAAAADf8gAAAMkgf/wAAAj/oA3/10W//hABz////+MAAAW+/scQA='),
-        68: (14.44, 1, 5, 13, 14, 'r///7HEACv/////1AK/2NGv/9Ar/MAAH/+Cv8wAADP9K/zAAAH/3r/MAAAX/mv8wAABf+K/zAAAH/3r/MAAA3/Ov8wAAf/0K/2M1r/8wr/////9ACv///tgQAA=='),
-        69: (13.34, 1, 5, 12, 14, 'r//////yr//////yr/YzMzMwr/MAAAAAr/MAAAAAr/ZEREQgr/////+Qr/////+Ar/MAAAAAr/MAAAAAr/MAAAAAr/YzMzMyr//////5r//////5'),
-        70: (12.22, 1, 5, 11, 14, 'r/////96//////ev9jMzMxr/MAAAAK/zAAAACv8wAAAAr/////9K//////Sv9jMzMwr/MAAAAK/zAAAACv8wAAAAr/MAAAAK/zAAAAA='),
-        71: (15.56, 0, 5, 15, 14, 'AABr7/2kAAAC3/////oAAN/9dFjv+AB//AAAAdtgDf8gAAAAAAD/0AAAAAAAL/sAAAAAAAL/wAAK///1D/4AAK///1Df8wABIm/1B//AAAAF/1AN/+dEav/0AC3/////5QAABr7/2lAA'),
-        72: (14.44, 1, 5, 13, 14, 'r/MAAAz/Gv8wAADP8a/zAAAM/xr/MAAAz/Gv8wAADP8a/4ZmZt/xr///////Gv//////8a/zAAAM/xr/MAAAz/Gv8wAADP8a/zAAAM/xr/MAAAz/Gv8wAADP8Q=='),
-        73: (5.56, 1, 5, 4, 14, 'r/Ov86/zr/Ov86/zr/Ov86/zr/Ov86/zr/Ov8w=='),
-        74: (11.12, 0, 5, 10, 14, 'AADf//wAAN///AAANF/8AAAAH/wAAAAf/AAAAB/8AAAAH/wAAAAf/AAAAB/8AAAAH/ts5QBP+l/+Vd/1DP///7AAfe/XAA=='),
-        75: (14.44, 1, 5, 14, 14, 'r/MAAC7/QK/zAALv9QCv8wAu/1AAr/MB7/UAAK/zHf9QAACv9d/1AAAAr///9QAAAK//3/8gAACv+gX/0QAAr/MAn/sAAK/zAAz/gACv8wAC7/QAr/MAAE//IK/zAAAI/9A='),
-        76: (12.22, 1, 5, 11, 14, 'r/MAAAAK/zAAAACv8wAAAAr/MAAAAK/zAAAACv8wAAAAr/MAAAAK/zAAAACv8wAAAAr/MAAAAK/zAAAACv9jMzMyr/////+a//////k='),
-        77: (16.66, 1, 5, 15, 14, 'r/9QAACv/1r/+gAAD//1r//wAAT//1r970AAn8/1r9r5AA74/1r+b+AD/0/1r+H/MI+z/1r+DPgN9j/1r+B/0f8T/1r+Av9/wD/1r+AN//cD/1r+AI//ID/1r+AC/9AD/1r+AA34AD/1'),
-        78: (14.44, 1, 5, 13, 14, 'r/0AAAf/Gv/3AAB/8a//8QAH/xr+/5AAf/Gv2f8gB/8a/h77AH/xr+B/9Af/Gv4A39B/8a/gBf9n/xr+AAz+f/Gv4AA//f8a/gAAr//xr+AAAv//Gv4AAAj/8Q=='),
-        79: (15.56, 0, 5, 15, 14, 'AABb7/2SAAABz/////YAAN/9dFr/9gB//AAABf/gDf8gAAAL/1D/0AAAAG/5L/sAAAAD/6L/wAAAAE/6D/4AAAAG/4DP8wAAAL/0Bv/RAABf/gAM/+dFr/9AABz/////UAAABb7+yBAA'),
-        80: (13.34, 1, 5, 12, 14, 'r////rUAr/////+Qr/YzR//0r/MAAH/4r/MAAE/6r/MAAH/4r/YzR//yr/////9wr////rQAr/MAAAAAr/MAAAAAr/MAAAAAr/MAAAAAr/MAAAAA'),
-        81: (15.56, 0, 5, 15, 18, 'AABb7/2CAAABz/////YAAN/9dFr/9QB//AAABf/gDf8wAAAL/1D/4AAAAG/5L/sAAAAE/6L/wAAAAE/7D/4AAAAF/5Df8wAAAK/2B//AAAA//xAN/8Ujj/9wAC3/////kAAAB8//+0AAAAAAL/0AAAAAAAC/+jIQAAAAAv//9QAAAAACvv1A'),
-        82: (14.44, 1, 5, 13, 14, 'r////+owCv//////UK/2MzWv/gr/MAAAz/Sv8wAACf9K/zAAAM/yr/YzNK/8Cv/////9EK/////5AAr/MAL/4QCv8wAH/7AK/zAADP9Qr/MAAC/+Gv8wAACP+w=='),
-        83: (13.34, 0, 5, 13, 14, 'AAfO/9kgAB3/////QAj/ohKf/QC/8QAAzbEK/2AAAAAAX//IQQAAAI////xgAAAnv///oAAAAAOP/0AAAAAAb/g72QAABf9x7/pCNu/zBP/////4AAKM//2kAA=='),
-        84: (12.22, 0, 5, 12, 14, 'z///////z///////IzN/+jMzAABf+AAAAABf+AAAAABf+AAAAABf+AAAAABf+AAAAABf+AAAAABf+AAAAABf+AAAAABf+AAAAABf+AAAAABf+AAA'),
-        85: (14.44, 1, 5, 13, 14, 'z/EAAAr/PP8QAACv88/xAAAK/zz/EAAAr/PP8QAACv88/xAAAK/zz/EAAAr/PP8QAACv88/xAAAL/zv/MAAA3/KP+gAAT/4C//pUj/9gBf////+QAAKd/+pAAA=='),
-        86: (13.34, 0, 5, 14, 14, 'r/QAAADv8F/5AAAE/6AO/gAACf9ACf8wAA3+AAP/gAA/+QAA39AAj/MAAI/zAN/QAAAv+AH/cAAADP0G/yAAAAb/G/wAAAAB/2/2AAAAAL/v8QAAAABf/6AAAAAADv9QAAA='),
-        87: (18.88, 0, 5, 19, 14, '3/AABP/zAAL/uf9AAH//YABv91/3AAv/+gAJ/zH/sADvz+AAz/AN/gAv9f8gD/sAn/IG/g/1A/9wBf9Qn6DfkH/zAB/5DfcJ/Qr/AADfwf8wb/DfsAAJ/0/wAv9P9wAAX/r8AA77/yAAAf//gACv/+AAAA3/9QAH//oAAACf/xAAP/9gAA=='),
-        88: (13.34, 0, 5, 14, 14, 'L/4AAAn/cAf/gAA//AAAz/IAz/MAAC/8Bv+AAAAH/4/+AAAAAM//9AAAAAA//7AAAAAAn//yAAAABP/P+wAAAA3+Gv9QAACf9gH/4QAD/8AAb/kADf8gAAz/MI/4AAAD/9A='),
-        89: (13.34, 0, 5, 13, 14, 'X/oAAAT/sL/zAADf8gL/sABv9wAI/0AO/QAADf0I/0AAAE/3/6AAAACv/+EAAAAB//YAAAAADP8QAAAAAM/xAAAAAAz/EAAAAADP8QAAAAAM/xAAAAAAz/EAAA=='),
-        90: (12.22, 0, 5, 12, 14, 'Cv/////zCv/////zAkRER//AAAAAHf8gAAAAv/UAAAAH/4AAAAA//AAAAAHv4QAAAAv/QAAAAI/4AAAABP+wAAAALv9URERCb//////6b//////6'),
-        91: (6.66, 1, 4, 6, 19, '7//27/3V77AA77AA77AA77AA77AA77AA77AA77AA77AA77AA77AA77AA77AA77AA77AA7/3V7//2'),
-        92: (5.56, 0, 4, 6, 15, 'v5AAj9AAX/AAL/MAD/YADPkACfwABv8AA/8gAP9QAN+AAK+wAH/gAE/xAB/0'),
-        93: (6.66, 0, 4, 6, 19, 'z//4rd/4AA/4AA/4AA/4AA/4AA/4AA/4AA/4AA/4AA/4AA/4AA/4AA/4AA/4AA/4AA/4rd/4z//4'),
-        94: (11.69, 0, 5, 12, 9, 'AADv+QAAAAX9/xAAAAz1v3AAAD/gT+AAAK+ADfUAAf8gB/sACPsAAf8gDvQAAK+QX9AAAD/x'),
-        95: (11.12, -1, 21, 13, 1, 'LMzMzMzMMA=='),
-        96: (6.66, 0, 4, 6, 3, 'PvkAAt+AAAr2'),
-        97: (11.12, 0, 8, 12, 11, 'ADrf2iAAA//9//IAC/8gP/kAAjMAD/wAAI3///wADP+4f/wAT/oAD/wAb/cAT/wAT/sC3/0ADv//2P/TAr/qEb7S'),
-        98: (12.22, 1, 4, 11, 15, 'n/IAAAAJ/yAAAACf8gAAAAn/IAAAAJ/yff1gCf+v//9gn/4gX/4J/2AAv/Of8wAI/1n/IAB/9p/zAAj/Wf9gAM/yn/4gX/0J/7///1Cv8Y79UAA='),
-        99: (11.12, 0, 8, 11, 11, 'AAjf+0AADf///0AJ/3Ad/wDv4ABv5C/7AAAAA/+gAAAAL/sAAAAA/+AAX+YJ/3Ac/xAd////YAAY3+tAAA=='),
-        100: (12.22, 0, 4, 11, 15, 'AAAAAO/QAAAADv0AAAAA79AAAAAO/QA7/qHv0C///979Cv+AC//Q/+AAP/0f/AAA/9L/sAAO/R/8AAD/0P/wAD/9C/+AHP/QP///zv0ATP6R3+A='),
-        101: (11.12, 0, 8, 11, 11, 'ABjf6zAAHf/O/0AJ/zAL/QD/wABf8y//////U//ru7u0L/sAAAAA/+AAAAAJ/3AJ7RAe/+7/cAAZ3+tAAA=='),
-        102: (6.66, 0, 4, 7, 15, 'ACv/kA3/6gD/wAAf+gCv//+53//ZAf+gAB/6AAH/oAAf+gAB/6AAH/oAAf+gAB/6AAH/oAA='),
-        103: (12.22, 0, 8, 11, 15, 'ADz+oc/QL///3f0K/4Ac/9D/8AA//R/8AAD/0v+wAA79H/wAAP/Q//AAP/0L/4Ac/9A////O/QBM/pHvwAAQAA/7B/9gCP9gLv/e/8AAKd/9cAA='),
-        104: (12.22, 1, 4, 10, 15, 'n/IAAACf8gAAAJ/yAAAAn/IAAACf8m39YJ/3///0n/5Rj/uf9wAO/p/zAAz/n/IADP+f8gAM/5/yAAz/n/IADP+f8gAM/5/yAAz/'),
-        105: (5.56, 1, 4, 4, 15, 'n/Kf8gAAAACf8p/yn/Kf8p/yn/Kf8p/yn/Kf8p/y'),
-        106: (5.56, -1, 4, 6, 19, 'AJ/yAJ/yAAAAAAAAAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAM/xX//QT/wg'),
-        107: (11.12, 1, 4, 11, 15, 'n/IAAAAJ/yAAAACf8gAAAAn/IAAAAJ/yAI/2Cf8gX/kAn/I/+wAJ/z78AACf/v9QAAn///0AAJ/6f/cACf8g3/EAn/IE/6AJ/yAL/zCf8gAv/QA='),
-        108: (5.56, 1, 4, 4, 15, 'n/Kf8p/yn/Kf8p/yn/Kf8p/yn/Kf8p/yn/Kf8p/y'),
-        109: (17.78, 1, 8, 16, 11, 'r/B++yBt/DCv9///xf//4J/+M+/+Us/1n/cAj/oAX/ef8wBv9gA/+J/yAG/1AD/4n/IAb/UAP/if8gBv9QA/+J/yAG/1AD/4n/IAb/UAP/if8gBv9QA/+A=='),
-        110: (12.22, 1, 8, 10, 11, 'r/Bt/WCv9v//9J/+UY/7n/cADv6f8wAM/5/yAAz/n/IADP+f8gAM/5/yAAz/n/IADP+f8gAM/w=='),
-        111: (12.22, 0, 8, 12, 11, 'AAfP/ZEAAM////4gCP+QBv/ADv8AAL/yL/wAAI/1P/oAAH/2L/wAAI/1Dv8AAM/yCP+QBv+wAM////0QAAfP/YEA'),
-        112: (12.22, 1, 8, 11, 15, 'r/B9/WAJ/6///2Cf/iBf/gn/cADP85/zAAj/Wf8gAH/2n/MACP9Z/2AAz/Kf/iBf/Qn/v///UJ/yjv1QCf8gAAAAn/IAAAAJ/yAAAACf8gAAAAA='),
-        113: (12.22, 0, 8, 11, 15, 'ADv+od/QL///3v0K/4Ac/9D/8AA//R/8AAD/0v+wAA79H/wAAP/Q/+AAP/0L/4Ac/9A////O/QBM/pHv0AAAAA79AAAAAO/QAAAADv0AAAAA79A='),
-        114: (7.78, 1, 8, 7, 11, 'r/Cvav+P95/+hTn/kACf9AAJ/yAAn/IACf8gAJ/yAAn/IACf8gAA'),
-        115: (11.12, 0, 8, 11, 11, 'ADrf60AAX//e/2AM/AAK6wDf0gAAAAn//aUAAAn///5AAAFZ3/8QAAAAb/Qc5gAH/yCv/t7/oAB8/+xQAA=='),
-        116: (6.66, 0, 6, 7, 13, 'AK9AAB/0AM///0rv/tQG/0AAb/QABv9AAG/0AAb/QABv9AAG/4AAP//mAH79QA=='),
-        117: (12.22, 1, 8, 10, 11, 'z/AADv3P8AAO/c/wAA79z/AADv3P8AAO/c/wAA79z/AAD/2/8gBP/Y/7I9/9L///rP0Ez+gL/g=='),
-        118: (11.12, 0, 8, 11, 11, 'z/IAAP/W/2AAT/cf+wAJ/yC/8ADvwAb/UD/3AA/5CP8QAL/g37AABf9f9gAAD/3/AAAAr/+gAAAF//UAAA=='),
-        119: (15.56, -1, 8, 17, 11, 'DvkADf9QAP9wv9AB//kAT/MH/wBfz9AH/wA/8wn37xCvsADvcN879Q73AAv6H/B/kf8wAH/V+wP9X/AAA/+fcA/5+wAAD//zAL//cAAAv/8AB//zAAAH/7AAP/8AAA=='),
-        120: (11.12, 0, 8, 11, 11, 'X/kACP9gr/MC/7AA79DP4QAE/8/1AAAJ//kAAAA//0AAAAz//QAAB/9v+QAC/5CP9ADf4QDv4Y/1AAT/oA=='),
-        121: (11.12, 0, 8, 11, 15, 'r/MAAP/U/4AAT/cO/QAJ/yCP8gDvwAL/cC/2AAz8B/8QAF/xv7AAAP9v9QAACf3/AAAAP/+QAAAA3/QAAAAN/gAAABn/YAAA///AAAAO/pEAAAA='),
-        122: (10, 0, 8, 10, 11, 'DP///8AM////wAAACf9gAABP+wAAAe/hAAAL/0AAAG/5AAAC/9AAAAz/MAAAP/////Q/////9A=='),
-        123: (7.78, 0, 4, 8, 19, 'AATf9QAf/+QAX/gAAG/yAAB/8gAAf/IAAH/yAACf8QAF/8AAr/sgAK/+QAAC7+AAAI/xAAB/8gAAf/IAAH/yAABv9wAAL//kAAXf9Q=='),
-        124: (5.59, 1, 4, 4, 19, 'f/F/8X/xf/F/8X/xf/F/8X/xf/F/8X/xf/F/8X/xf/F/8X/xf/E='),
-        125: (7.78, 0, 4, 8, 19, 'n/wgAH//0AAAv/IAAG/zAABf8wAAX/MAAF/zAABP9QAAH/0wAATf9wAG//cAL/wQAF/0AABf8wAAX/MAAG/zAAC/8gB//+AAn/wwAA=='),
-        126: (11.69, 0, 10, 11, 4, 'B9/FAAAz///8QV09MW3//+IQAAbf1Q=='),
-        183: (6.66, 1, 11, 4, 3, 'n/Kv86/z'),
-        223: (12.22, 1, 4, 11, 15, 'AFz/2BAAn////RAv/CB/9gf/QAH/gJ/yAH/0Cf8gX/kAn/If+gAJ/yL/oACf8g3/sQn/IC3/0J/yAAr/af8gAA/5n/IwAv+J/yv+//Kf8n3+swA='),
-        224: (11.12, 0, 4, 12, 15, 'AG/1AAAAAAX/QAAAAAAt8gAAAAAAAAAAADrv2RAABP/9/+EADP8QT/gAAjMAH/oAAY3///sADf+oj/sAX/kAH/sAf/YAX/sAX/oC7/wAHv//yf/SA8/pAb7R'),
-        225: (11.12, 0, 4, 12, 15, 'AAAF/2AAAABP9AAAAAL9IAAAAAAAAAAAADrv2RAABP/9/+EADP8QT/gAAjMAH/oAAY3///sADf+oj/sAX/kAH/sAf/YAX/sAX/oC7/wAHv//yf/SA8/pAb7R'),
-        226: (11.12, 0, 4, 12, 15, 'AAHv8gAAAB37/hAAAM5APtAAAAAAAAAAADrv2RAABP/9/+EADP8QT/gAAjMAH/oAAY3///sADf+oj/sAX/kAH/sAf/YAX/sAX/oC7/wAHv//yf/SA8/pAb7R'),
-        228: (11.12, 0, 5, 12, 14, 'AM9Qj5AAAM9Qj5AAAAAAAAAAADrv2RAABP/9/+EADP8QT/gAAjMAH/oAAY3///sADf+oj/sAX/kAH/sAf/YAX/sAX/oC7/wAHv//yf/SA8/pAb7R'),
-        229: (11.12, 0, 2, 12, 17, 'AALPsQAAAAy1ygAAAA9AXgAAAAy0ygAAAALPsQAAAAAAAAAAADrv2RAABP/9/+EADP8QT/gAAjMAH/oAAY3///sADf+oj/sAX/kAH/sAf/YAX/sAX/oC7/wAHv//yf/SA8/pAb7R'),
-        230: (17.78, 0, 8, 17, 11, 'ADrv+0S//YAAP//e///s/7AK7yAe/6AE/1AAAAC/9AAM+wB9////////0L/7h9/93d3cP/sADP8wAAAF/4AB//YAAAA//AG//+IC7nDf//9m//7/0QK+/EAEvv2BAA=='),
-        231: (11.12, 0, 8, 11, 15, 'AAjf+0AADf///0AJ/3Ad/wDv4ABv5C/7AAAAA/+gAAAAL/sAAAAA/+AAX+YJ/3Ac/xAd////YAAY3+tAAAAE8QAAAACfwwAAAAJvoAAAA//DAAA='),
-        232: (11.12, 0, 4, 11, 15, 'AB77AAAAABv6AAAAAAj4AAAAAAAAAAAY3+swAB3/zv9ACf8wC/0A/8AAX/Mv/////1P/67u7tC/7AAAAAP/gAAAACf9wCe0QHv/u/3AAGd/rQAA='),
-        233: (11.12, 0, 4, 11, 15, 'AAAB38AAAADPoAAAAL9gAAAAAAAAAAAY3+swAB3/zv9ACf8wC/0A/8AAX/Mv/////1P/67u7tC/7AAAAAP/gAAAACf9wCe0QHv/u/3AAGd/rQAA='),
-        234: (11.12, 0, 4, 11, 15, 'AAC/9QAAAK++9AAAn3Ac8gAAAAAAAAAY3+swAB3/zv9ACf8wC/0A/8AAX/Mv/////1P/67u7tC/7AAAAAP/gAAAACf9wCe0QHv/u/3AAGd/rQAA='),
-        235: (11.12, 0, 5, 11, 14, 'AH+gP+AAB/oD/gAAAAAAAAABjf6zAAHf/O/0AJ/zAL/QD/wABf8y//////U//ru7u0L/sAAAAA/+AAAAAJ/3AJ7RAe/+7/cAAZ3+tAA='),
-        236: (5.56, -1, 4, 6, 15, 'b/UABO9AACzyAAAAAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAJ/yAJ/y'),
-        237: (5.56, 1, 4, 6, 15, 'AN/QDPoAr3AAAAAAn/IAn/IAn/IAn/IAn/IAn/IAn/IAn/IAn/IAn/IAn/IA'),
-        238: (5.56, -1, 4, 8, 15, 'AL/2AAr870CPcBvyAAAAAACf8gAAn/IAAJ/yAACf8gAAn/IAAJ/yAACf8gAAn/IAAJ/yAACf8gAAn/IA'),
-        239: (5.56, -1, 5, 7, 14, 'b7Av9vsC/wAAAAAJ/yAAn/IACf8gAJ/yAAn/IACf8gAJ/yAAn/IACf8gAJ/yAAn/IA=='),
-        241: (12.22, 1, 4, 10, 15, 'AJ/DBfAE/O/OwAfgCO0wAAAAAACv8G39YK/2///0n/5Rj/uf9wAO/p/zAAz/n/IADP+f8gAM/5/yAAz/n/IADP+f8gAM/5/yAAz/'),
-        242: (12.22, 0, 4, 12, 15, 'AAn/MAAAAABv4gAAAAAD7hAAAAAAAAAAAAfP/ZEAAM////4gCP+QBv/ADv8AAL/yL/wAAI/1P/oAAH/2L/wAAI/1Dv8AAM/yCP+QBv+wAM////0QAAfP/YEA'),
-        243: (12.22, 0, 4, 12, 15, 'AAAAf/UAAAAF/jAAAABPwQAAAAAAAAAAAAfP/ZEAAM////4gCP+QBv/ADv8AAL/yL/wAAI/1P/oAAH/2L/wAAI/1Dv8AAM/yCP+QBv+wAM////0QAAfP/YEA'),
-        244: (12.22, 0, 4, 12, 15, 'AAB/+gAAAAX+z5AAAE+hCPcAAAAAAAAAAAfP/ZEAAM////4gCP+QBv/ADv8AAL/yL/wAAI/1P/oAAH/2L/wAAI/1Dv8AAM/yCP+QBv+wAM////0QAAfP/YEA'),
-        246: (12.22, 0, 5, 12, 14, 'AB/wDfQAAB/wDfQAAAAAAAAAAAfP/ZEAAM////4gCP+QBv/ADv8AAL/yL/wAAI/1P/oAAH/2L/wAAI/1Dv8AAM/yCP+QBv+wAM////0QAAfP/YEA'),
-        248: (12.22, 0, 7, 13, 13, 'AAAAAAA0AAB8/9h/YADP////kACP+QCP/AAO/wAe//IC/8Ad2f9QP/oL4X/2Av/K8gj/UA7/9ADP8gCP+wBv+wAF/////hAE+Wzv2BAARAAAAAAAAA=='),
-        249: (12.22, 1, 4, 10, 15, 'Ae+wAAAAG/oAAAAAj4AAAAAAAADP8AAO/c/wAA79z/AADv3P8AAO/c/wAA79z/AADv3P8AAP/b/yAE/9j/sj3/0v//+s/QTP6Av+'),
-        250: (12.22, 1, 4, 10, 15, 'AAAH/0AAAG/jAAAE+xAAAAAAAADP8AAO/c/wAA79z/AADv3P8AAO/c/wAA79z/AADv3P8AAP/b/yAE/9j/sj3/0v//+s/QTP6Av+'),
-        251: (12.22, 1, 4, 10, 15, 'AAf/oAAAb+z4AAT6EI9gAAAAAADP8AAO/c/wAA79z/AADv3P8AAO/c/wAA79z/AADv3P8AAP/b/yAE/9j/sj3/0v//+s/QTP6Av+'),
-        252: (12.22, 1, 5, 10, 14, 'Af8A30AB/wDfQAAAAAAAz/AADv3P8AAO/c/wAA79z/AADv3P8AAO/c/wAA79z/AAD/2/8gBP/Y/7I9/9L///rP0Ez+gL/g=='),
-        253: (11.12, 0, 4, 11, 19, 'AAAB38AAAADPkAAAAL9gAAAAAAAAAK/zAAD/1P+AAE/3Dv0ACf8gj/IA78AC/3Av9gAM/Af/EABf8b+wAAD/b/UAAAn9/wAAAD//kAAAAN/0AAAADf4AAAAZ/2AAAP//wAAADv6RAAAA'),
-        255: (11.12, 0, 5, 11, 18, 'AH+QT+AAB/kE/gAAAAAAAAr/MAAP/U/4AAT/cO/QAJ/yCP8gDvwAL/cC/2AAz8B/8QAF/xv7AAAP9v9QAACf3/AAAAP/+QAAAA3/QAAAAN/gAAABn/YAAA///AAAAO/pEAAA'),
-        339: (18.88, 0, 8, 19, 11, 'AAfP/YAZ7+oQAAz////e/8/+EAj/kAb//hAe+gDv8AAL/4AAj/Av/AAAj/////8j/6AAB//t3d3SL/wAAI/4AAAAAO/wAAz/sAAAAAj/kAb//0AM6wAM////zv/v/0AAB8/9cBnv6jAA'),
-        8211: (11.12, 0, 13, 11, 2, 'b/////+G//////g='),
-        8212: (20, 0, 13, 20, 2, '//////////////////////////8='),
-        8216: (5.56, 1, 5, 4, 6, 'DdBPQI8An/Kv8q/y'),
-        8217: (5.56, 1, 5, 4, 6, 'n/Of85/yBvEL0E9g'),
-        8220: (10, 1, 5, 8, 6, 'DOEI8i9gD5BvED9Aj/Rf94/0X/eP9F/3'),
-        8221: (10, 1, 5, 8, 6, 'f/VP+H/1T/h/9E/3BfMB9gnwBvI/gB6w'),
-        8230: (20, 2, 16, 16, 3, 'z/AAb/YAH/vP8ABv9gAf+8/wAG/2AB/7'),
-        8722: (11.69, 0, 11, 11, 3, 'L//////S//////0DMzMzMyA='),
-        9642: (7.09, 1, 10, 6, 5, '///w///w///w///w///w'),
-    },
-    ('sans_b', 15): {
-        32: (4.17, 0, 0, 0, 0, ''),
-        33: (5, 1, 3, 3, 11, 'n4j4j3f3f2b2b1b1AAn4n4A='),
-        34: (7.11, 1, 3, 6, 4, '/w3x/g3w7Qzw3Avg'),
-        35: (8.34, 0, 3, 9, 11, 'AB8AtgAFwA4wAIkC8Ab////xAfQZkQAfALYABNAOMAz///+wG3FtEQDjCKAAHwC2AAA='),
-        36: (8.34, 0, 2, 9, 14, 'AAKQAABM/+cAL+nN9gb4OT6Qb7OQAAH//VAAA8//4wAAPL/QAAOQ7xjkOQ7wT+rc+gBc/9gAAAOQAAAAAgAA'),
-        37: (13.34, 0, 3, 13, 11, 'Ce6AAB9wBfZvQArQAJ8A+AT0AAnwD3DaAABfZvR/EAAAnugvZN+xAAALwPs+oAAF8z9grgAA6QP2CtAAjgAOs+oAL1AATfsQ'),
-        38: (10.83, 0, 3, 11, 11, 'AAbfwwAAA/pO0AAAXzC/AAAE94+AAAAf/4HUAD7/YF9QDvXvO/AE+QP/+QA/oAf/UADfl+//kwKu/DTOQA=='),
-        39: (3.56, 0, 3, 3, 4, 'L8L7H6D5'),
-        40: (5, 0, 3, 5, 14, 'AG+gDvEG+gDPQA/wAv4AP9AD/QAv4AD/AAz0AG+gAO8gBvs='),
-        41: (5, 0, 3, 5, 14, 'v1AB/gAK9gBPwAD/AA7yAN8wDfMA7yAP8AT8AK9gL+AL9gA='),
-        42: (5.84, 0, 3, 6, 6, 'ANsAU7pEz//6CP9gLqzQGySg'),
-        43: (8.77, 0, 5, 9, 8, 'AAfzAAAAfzAAAAfzAAb////yOqz7qhAAfzAAAAfzAAAASiAA'),
-        44: (4.17, 1, 12, 3, 4, '/y/yHwqg'),
-        45: (5, 0, 9, 5, 2, 'b/9lzMQ='),
-        46: (4.17, 1, 12, 3, 2, '/y/y'),
-        47: (4.17, 0, 3, 4, 11, 'AN4A+wP4BvUJ8gzwD8AvkG9gnzDPAA=='),
-        48: (8.34, 0, 3, 8, 11, 'AJ77IAn9v+AP8Ar1P8AH+V+gBftvoAX7X6AF+j/AB/kP8Av1CP2/0ACe+yA='),
-        49: (8.34, 0, 3, 8, 11, 'AG75AA3/+QALSPkAAAj5AAAI+QAACPkAAAj5AAAI+QAACPkACIz8hx////4='),
-        50: (8.34, 0, 3, 8, 11, 'Aq78QA38v/I/0Ar3AAAJ+AAAL/MAAu+QAD/6AAP/gAAO+AAAb/u7uH////s='),
-        51: (8.34, 0, 3, 8, 11, 'Aq78QB78v/NesAr3AAAL9QAKz6AAD/1gAAAs9wAABft+oAj6L/y/9AO+/FA='),
-        52: (8.34, 0, 3, 9, 11, 'AAC/4AAAX/4AAB6/4AAJ8/4AA/cf4ADdAf4AfzAf4Az////0aIif+CAAAf4AAAAf4AA='),
-        53: (8.34, 0, 3, 8, 11, 'Dv//9Q/4iIIP4AAAH+AAAC/r/WA//b/2FUAH/AAAA/5esAf8Hvy/9AK+/EA='),
-        54: (8.34, 0, 3, 8, 11, 'AH38MAf+v/EP8QnUP7AAAG+q/XB/+5/1b9AH+k+wBPwf8Qf5Cf2v8wCO/EA='),
-        55: (8.34, 0, 3, 8, 11, 'X///+zu7vPoAAAvzAABfkAAA7xAAB/kAAA7yAABP0AAAj5AAAL9gAADfUAA='),
-        56: (8.34, 0, 3, 8, 11, 'A779YA75fvU/0Aj5HvIL9QPf/2AL+o7iX8AG+3+QBP1vwAb7HvqO9AKu/FA='),
-        57: (8.34, 0, 3, 8, 11, 'Aq77IA38v+Bf0Av2f6AG+l/ACfse+6/8A8/I+wAABvktwAz0DfzPwAK/+hA='),
-        58: (5, 1, 6, 3, 8, 'n4n4AAAAAAAAn4n4'),
-        59: (5, 1, 6, 3, 10, 'j5j5AAAAAAAAj5j4C2Px'),
-        60: (8.77, 0, 5, 9, 8, 'AAAAbCAASv/hGO/6QAb9cQAAb9cQAAGN/6QAAASv/hAAAAbC'),
-        61: (8.77, 0, 7, 9, 5, 'b////yOqqqqhAAAAAAOqqqqhb////yA='),
-        62: (8.77, 0, 5, 9, 8, 'WkAAAAT/6CAAAGz/xgAAAo7yAAAo7yAGz/xgT/6CAAWkAAAA'),
-        63: (9.16, 0, 3, 9, 11, 'AI39kQC/6+/AL+EB7yAAAA30AAAE/gAABv9AAAT+IAAAr2AAAAAAAAAAz1AAAAz1AAA='),
-        64: (14.62, 0, 3, 14, 13, 'AAAo3/2BAAAG6TETrkAAfSAAAAbhAvMEz8bAtwmgTkBvkHoOQMcAD1BrDyDyAC8QiR8R8QCeANUPMOgWzRnAC4BN+Rz6EAPzAAAAAAAAb4MSR9QAAAOu/9lAAA=='),
-        65: (10.83, 0, 3, 11, 11, 'AAD/0AAAAG//MAAAC/f4AAAB/A/gAABvcJ8wAAvxBPgAAf///+AAb8qq3zAM8wAG+QH+AAAf4H+gAADfQA=='),
-        66: (10.83, 1, 3, 10, 11, '///+xQD/qZv/QP8gAL+A/yAC30D////2AP+pmv9A/yAAT+D/IAAP8f8gAE/w/6ma/5D////WAA=='),
-        67: (10.83, 0, 3, 11, 11, 'ABnv7GAALv/M/5AM+xAC2xL/IAAAAF/gAAAABf0AAAAAX+AAAAAB/yAAAAAL/BAByyAu/8z/sAAZ3+xgAA=='),
-        68: (10.83, 1, 3, 10, 11, '///8YAD/ut/8AP8gA++A/yAAX+D/IAAf8v8gAA/y/yAAH/H/IABv4P8gAu9w/7q/+wD///1wAA=='),
-        69: (10, 1, 3, 9, 11, '/////y/7qqqh/yAAAA/yAAAA////+g/7qqpw/yAAAA/yAAAA/yAAAA/7qqqk/////2A='),
-        70: (9.16, 1, 3, 8, 11, '////+f+6qqb/IAAA/yAAAP////f/uqqk/yAAAP8gAAD/IAAA/yAAAP8gAAA='),
-        71: (11.67, 0, 3, 11, 11, 'ABnf/YAALv/M/9AM/BAByzL/IAAAAF/gAAAABf0ADP/7X+AAeb+x/zAAA/sL/BAAn7Au/8v/9AAZ3/yBAA=='),
-        72: (10.83, 1, 3, 9, 11, '/yAAX9/yAAX9/yAAX9/yAAX9/////9/9zM39/yAAX9/yAAX9/yAAX9/yAAX9/yAAX9A='),
-        73: (4.17, 1, 3, 3, 11, '/y/y/y/y/y/y/y/y/y/y/yA='),
-        74: (8.34, 0, 3, 8, 11, 'AA7/9QAJv/UAAA31AAAN9QAADfUAAA31AAAN9QAADfR+gB/yT/zvsAXf6RA='),
-        75: (10.83, 1, 3, 10, 11, '/yAAr8D/IAn9EP8gj9EA/yf+IAD/j/IAAP//+AAA/7T/QAD/IG/hAP8gC/wA/yAB74D/IAA/9Q=='),
-        76: (9.16, 1, 3, 8, 11, '/yAAAP8gAAD/IAAA/yAAAP8gAAD/IAAA/yAAAP8gAAD/IAAA/7qqp/////s='),
-        77: (12.5, 1, 3, 11, 11, '//AACP9//1AA3/f++gAv73/r4Ab69/5/ML9/f+L4D6b3/g7U9m9/4J+vFvf+BP/Ab3/gD/cG9/4AryBvcA=='),
-        78: (10.83, 1, 3, 9, 11, '/7AAH9//QAH9//wAH9/r9QH9/i/QH9/gr2H9/gL+H9/gCfj9/gAf79/gAI/9/gAA79A='),
-        79: (11.67, 0, 3, 12, 11, 'ABjf/FAAAu/83/oAC/wQBP9QL/IAAJ/AX+AAAE/wX9AAAD/wT+AAAE/gH/MAAJ+wC/wQBP9AAd/73/gAABjf61AA'),
-        80: (10, 1, 3, 9, 11, '///+og/7q+/Q/yAA71/yAAv3/yAB71/7qu/Q///+oQ/yAAAA/yAAAA/yAAAA/yAAAAA='),
-        81: (11.67, 0, 3, 12, 14, 'ABjf/FAAAe/8z/kAC/wQBP9QH/MAAJ+wX+AAAE/wb9AAAD/wX+AAAE/wL/MAAI/AC/sAA/9gAu/qz/sAABnv/oAAAAAM9wAAAAAF/7oAAAAAbv0A'),
-        82: (10.83, 1, 3, 10, 11, '////xgD/uqz/cP8gAG/g/yAAP/D/IAB/wP+6rP9A////4wD/IB71AP8gBv4A/yAAz5D/IAA/8w=='),
-        83: (10, 0, 3, 10, 11, 'AH3/2AAK/ZnvoA/xAC7AD/UAAAAK/8hAAACO//5gAAAmz/IAAAAM9U3AAA31Hv6q79ABnf/ZEA=='),
-        84: (9.16, 0, 3, 9, 11, '3/////iq3+qqAAj6AAAAj6AAAAj6AAAAj6AAAAj6AAAAj6AAAAj6AAAAj6AAAAj6AAA='),
-        85: (10.83, 0, 3, 10, 11, 'H/EABP4f8QAE/h/xAAT+H/EABP4f8QAE/h/xAAT+H/EABP4P8gAG/Q35AB35BP/b7+EAS//pEA=='),
-        86: (10, 0, 3, 10, 11, 'v4AAB/tfwAAM9g/xAB/xCvYAX7AF+wCvUAD/AO8AAK9D+gAAT5j1AAAO3PAAAAn/oAAABP9AAA=='),
-        87: (14.16, 0, 3, 15, 11, '30AD/2AC/wr4AG/6AF/Ab7AK/tAI+AL+AN2vEM9ADvIfp/QP8ACvVPZPgvwABviPMftfkAAvu/AN6fUAAO/sAK/fEAAL/4AG/9AAAH/1AD/5AAA='),
-        88: (10, 0, 3, 10, 11, 'T+EAHvQK+QCfoAHvM/8QAG/M9wAAC//QAAAI/6AAAC//8wAAv3f8AAX9AN9gDvQAT+GfsAAL+Q=='),
-        89: (10, 0, 3, 10, 11, 'f8AADPcN9wB/0AP/Ef8wAJ+7+QAAHv/hAAAF/2AAAAH/EAAAAf8QAAAB/xAAAAH/EAAAAf8QAA=='),
-        90: (9.16, 0, 3, 9, 11, 'D////3C7u7/1AAAI+wAABP4QAAHvQAAAv5AAAG/QAAAv8gAADfYAAAf/u7u4j////7A='),
-        91: (5, 0, 3, 5, 14, 'L//S/mUvwAL8AC/AAvwAL8AC/AAvwAL8AC/AAvwAL+ZS//0='),
-        92: (4.17, 0, 3, 4, 11, 'zwCPMF9gL5APwAzwCfIG9QP4APsA3g=='),
-        93: (5, 0, 3, 5, 14, '3/8lbfIAzyAM8gDPIAzyAM8gDPIAzyAM8gDPIAzyVt8t//I='),
-        94: (8.77, 0, 3, 9, 7, 'AA/8AAAG+vIAANwfkAA/YK8ACvAE9gH5AA3QfyAAfzA='),
-        95: (8.34, -1, 15, 10, 1, 'GZmZmZQ='),
-        96: (5, 0, 2, 5, 3, 'X7AAf2AAjxA='),
-        97: (8.34, 0, 6, 9, 8, 'Ar78MADvdv8QAiAM9ABt//9QT+Mc9Qj5Af9Qb+fN+iCf6B3l'),
-        98: (9.16, 1, 3, 8, 11, '/xAAAP8QAAD/EAAA/0z9QP/Xr/D/UA31/yAK9/8QCvf/UA31/9ev4P9M/TA='),
-        99: (8.34, 0, 6, 8, 8, 'AJ78UAr7fvQv8AX6X8AAAF/AAAAv8AT7C/t+9QCe/VA='),
-        100: (9.16, 0, 3, 9, 11, 'AAAA/xAAAA/xAAAA/xAs/V7xDPx9/xP/AC/xX8AA/xX8AA/xP/AD/xDfx9/xAs/U3yA='),
-        101: (8.34, 0, 6, 8, 8, 'AZ79QAv5XfIv0AT5X///+1/UREMv4AAAC/tr9gGe/XA='),
-        102: (5, 0, 3, 6, 11, 'Ab/gB/xgCfcAz//wTPpgCfcACfcACfcACfcACfcACfcA'),
-        103: (9.16, 0, 6, 9, 11, 'As/V3yDfx9/xP/AC/xX8AA/xX8AA/xP/AC/xDfx9/xAs/U7xAAAB/wDfpr+QAq79cAA='),
-        104: (9.16, 1, 3, 8, 11, '/xAAAP8QAAD/EAAA/zv9QP/Kz+D/YA/y/yAN8/8QDfP/EA3z/xAN8/8QDfM='),
-        105: (4.17, 1, 3, 3, 11, '/xeAAA/x/x/x/x/x/x/x/xA='),
-        106: (4.17, -1, 3, 5, 14, 'AP8QB4AAAAAP8QD/EA/xAP8QD/EA/xAP8QD/EA/xGf8D/mA='),
-        107: (8.34, 1, 3, 8, 11, '/xAAAP8QAAD/EAAA/xB/oP8V/AD/X9EA//+QAP++8wD/FfwA/xDPYP8QP/E='),
-        108: (4.17, 1, 3, 3, 11, '/x/x/x/x/x/x/x/x/x/x/xA='),
-        109: (13.34, 1, 6, 12, 8, '/yz7B+5g/8nvvK/y/2B/8Qz1/yBPwAr2/xBPwAr2/xBPwAr2/xBPwAr2/xBPwAr2'),
-        110: (9.16, 1, 6, 8, 8, '/xv9QP/Kz+D/YA/y/yAN8/8QDfP/EA3z/xAN8/8QDfM='),
-        111: (9.16, 0, 6, 9, 8, 'AI3+oQCvx7/QL/EA31X8AAr4X8AAr4L/EA31Cvx7/AAI7+kQ'),
-        112: (9.16, 1, 6, 8, 11, '/zz9QP/Xr/D/UA31/yAK9/8gCvf/UA31/9ev4P9c/TD/EAAA/xAAAP8QAAA='),
-        113: (9.16, 0, 6, 9, 11, 'As/V3yDPx8/xP/AC/xX8AA/xX8AA/xP/AD/xDfx9/xAs/V7xAAAA7xAAAA7xAAAA7xA='),
-        114: (5.84, 1, 6, 5, 8, '/z6f/Mf/gA/yAP8QD/EA/xAP8QA='),
-        115: (8.34, 0, 6, 8, 8, 'Ar79cA73bOQf4gAADP/qQABa3/YAAAX7PsZq9wbf/XA='),
-        116: (5, 0, 4, 5, 10, 'A/MAjzDf/7XvhA3zAN8wDfMA3zAL+2BO+g=='),
-        117: (9.16, 0, 6, 9, 8, 'H/AA/xH/AA/xH/AA/xH/AA/xH/AA/xD/IE/xDP2d7xAs/D3y'),
-        118: (8.34, 0, 6, 9, 8, 'z2AA/xb7AF+wH/AK9QC/UP8ABflfoAAP6vQAAK/+AAAE/4AA'),
-        119: (11.67, -1, 6, 13, 8, 'DvAG/wBfkK8wr/QI9Ab2Dp+QzwAvo/W9D8AA7X8X9PgACvvQP79AAG/5AO/wAAL/UAv7AA=='),
-        120: (8.34, 0, 6, 9, 8, 'b8AH+wC/Yv4QAe/PQAAE/5AAAH/8AAAv2vcADfQO8wj5AF/Q'),
-        121: (8.34, 0, 6, 9, 11, 'r3AB/xT8AF+wDvEK9QCPcP8AAvw/kAAL+fMAAF/9AAAA73AAAB7xAAGN+QAAP/kAAAA='),
-        122: (7.5, 0, 6, 7, 8, 'H///kHd+9wAG/AAD/yAA31AAr6AAT/iIdv///w=='),
-        123: (5.84, 0, 3, 6, 14, 'AG74AP+TAf4AAf0AAf0ACPsAz8EAXfYAA/wAAf0AAf0AAf4AAO+TAF74'),
-        124: (4.2, 1, 3, 3, 14, '3x3x3x3x3x3x3x3x3x3x3x3x3x3x'),
-        125: (5.84, 0, 3, 6, 14, 'v9QASv0AAP4AAP4AAP8AAN9gAD75AJ/EAP8AAP4AAP4AAf4AS/wAv9MA'),
-        126: (8.77, 0, 7, 9, 3, 'K/xQASbZ38njMABd+hA='),
-        183: (5, 1, 7, 3, 3, 'Mw/y/yA='),
-        223: (9.16, 1, 3, 8, 11, 'Bt/pEG/ov6DPQB/Q7xCPkP8V+wD/GfgA/xP/oP8QLff/EAT7/xpr+P8d/qA='),
-        224: (8.34, 0, 2, 9, 12, 'Af4QAAAD+gAAAAT1AAAAAAAAA778MAD/d/4AAiAM8wB9//9AX9Md9An4Af9Af+fd+SCv5y3k'),
-        225: (8.34, 0, 2, 9, 12, 'AAC/UAAAb2AAAB9wAAAAAAAAA778MAD/d/4AAiAM8wB9//9AX9Md9An4Af9Af+fd+SCv5y3k'),
-        226: (8.34, 0, 2, 9, 12, 'AB71AAAL2OEABeELoAAAAAAAA778MAD/d/4AAiAM8wB9//9AX9Md9An4Af9Af+fd+SCv5y3k'),
-        228: (8.34, 0, 3, 9, 11, 'BPQvcABPQvcAAAAAAAA778MAD/d/4AAiAM8wB9//9AX9Md9An4Af9Af+fd+SCv5y3kA='),
-        229: (8.34, 0, 1, 9, 13, 'AC3kAAAKUtAAAKUtAAAC3kAAAAAAAAA778MAD/d/4AAiAM8wB9//9AX9Md9An4Af9Af+fd+SCv5y3kA='),
-        230: (13.34, 0, 6, 13, 8, 'A778ae/DAO+G7/de8QAACfsAb3Bt//////o/5Cn8ZmZH+gDf0AAAX/e936bPQJ76Ea79UA=='),
-        231: (8.34, 0, 6, 8, 11, 'AJ78UAr7fvQv8AX6X8AAAF/AAAAv8AT7C/t+9QCe/VAACdMAAACrAAAt1AA='),
-        232: (8.34, 0, 2, 8, 12, 'AL9QAAAM4QAAAdoAAAAAAAGe/UAL+V3yL9AE+V////tf1ERDL+AAAAv7a/YBnv1w'),
-        233: (8.34, 0, 2, 8, 12, 'AAB/oAAC+wAADLAAAAAAAAGe/UAL+V3yL9AE+V////tf1ERDL+AAAAv7a/YBnv1w'),
-        234: (8.34, 0, 2, 8, 12, 'AAz4AACOfzAC8wjQAAAAAAGe/UAL+V3yL9AE+V////tf1ERDL+AAAAv7a/YBnv1w'),
-        235: (8.34, 0, 3, 8, 11, 'AfcOoAH3DqAAAAAAAZ79QAv5XfIv0AT5X///+1/UREMv4AAAC/tr9gGe/XA='),
-        236: (4.17, -1, 2, 5, 12, 'T8AAb3AAfyAAAAD/IA/yAP8gD/IA/yAP8gD/IA/y'),
-        237: (4.17, 0, 2, 5, 12, 'AK9gX4AegAAAAA/yAP8gD/IA/yAP8gD/IA/yAP8g'),
-        238: (4.17, -1, 2, 6, 12, 'Af9AC8ngbhDJAAAAAP8gAP8gAP8gAP8gAP8gAP8gAP8gAP8g'),
-        239: (4.17, -1, 3, 6, 11, 'T0H3T0H3AAAAAP8gAP8gAP8gAP8gAP8gAP8gAP8gAP8g'),
-        241: (9.16, 1, 2, 8, 12, 'B/YHgA9tfFAeAdwAAAAAAP8b/UD/ys/g/2AP8v8gDfP/EA3z/xAN8/8QDfP/EA3z'),
-        242: (9.16, 0, 2, 9, 12, 'AG+gAAAAj1AAAACeAAAAAAAAAI3+oQCvx7/QL/EA31X8AAr4X8AAr4L/EA31Cvx7/AAI7+kQ'),
-        243: (9.16, 0, 2, 9, 12, 'AAAv4QAADOIAAAbjAAAAAAAAAI3+oQCvx7/QL/EA31X8AAr4X8AAr4L/EA31Cvx7/AAI7+kQ'),
-        244: (9.16, 0, 2, 9, 12, 'AAn8AAAE9uYAAOcE8QAAAAAAAI3+oQCvx7/QL/EA31X8AAr4X8AAr4L/EA31Cvx7/AAI7+kQ'),
-        246: (9.16, 0, 3, 9, 11, 'AMwK8AAMwK8AAAAAAAAI3+oQCvx7/QL/EA31X8AAr4X8AAr4L/EA31Cvx7/AAI7+kQA='),
-        248: (9.16, 0, 5, 10, 10, 'AAAAATAAjf6dYAr8ev4AL/EK/1BfwJuvgF/IwK+AL/0A31AL/Hv8AE6N/pEAMQAAAAA='),
-        249: (9.16, 0, 2, 9, 12, 'AM9AAAABzhAAAAHaAAAAAAAAH/AA/xH/AA/xH/AA/xH/AA/xH/AA/xD/IE/xDP2d7xAs/D3y'),
-        250: (9.16, 0, 2, 9, 12, 'AAAv4AAADOIAAAfiAAAAAAAAH/AA/xH/AA/xH/AA/xH/AA/xH/AA/xD/IE/xDP2d7xAs/D3y'),
-        251: (9.16, 0, 2, 9, 12, 'AAn7AAAE9vYAAOYF8QAAAAAAH/AA/xH/AA/xH/AA/xH/AA/xH/AA/xD/IE/xDP2d7xAs/D3y'),
-        252: (9.16, 0, 3, 9, 11, 'ANwK8AANwK8AAAAAAAH/AA/xH/AA/xH/AA/xH/AA/xH/AA/xD/IE/xDP2d7xAs/D3yA='),
-        253: (8.34, 0, 2, 9, 15, 'AAB/kAAAL7AAAAywAAAAAAAAr3AB/xT8AF+wDvEK9QCPcP8AAvw/kAAL+fMAAF/9AAAA73AAAB7xAAGN+QAAP/kAAAA='),
-        255: (8.34, 0, 3, 9, 14, 'AfcPoAAfcPoAAAAAAAr3AB/xT8AF+wDvEK9QCPcP8AAvw/kAAL+fMAAF/9AAAA73AAAB7xAAGN+QAAP/kAAA'),
-        339: (14.16, 0, 6, 14, 8, 'AI3+kZ78MAr8e//3XuEv8QDfsAb3X8AAr///+V/AAK/GZmQv8QDfwAAACvx7//lt5ACO/oGu/FA='),
-        8211: (8.34, 0, 9, 8, 2, 'j////kd3d3Y='),
-        8212: (15, 0, 9, 15, 2, '//////////d3d3d3d3d3'),
-        8216: (4.17, 1, 3, 3, 4, 'fA1Q/y/y'),
-        8217: (4.17, 1, 3, 3, 4, '/y/yLwqg'),
-        8220: (7.5, 1, 3, 6, 4, 'XQPhtgmA3zv17zz1'),
-        8221: (7.5, 1, 3, 6, 4, '3zv23zv1HxDjiwbQ'),
-        8230: (15, 1, 12, 13, 2, 'X8AI+ADfRfwAj4AN9A=='),
-        8722: (8.77, 0, 8, 9, 2, 'b////yOqqqqh'),
-        9642: (5.31, 0, 7, 5, 4, 'P/+D//g//4P/+A=='),
-    },
-    ('sans_b', 12): {
-        32: (3.33, 0, 0, 0, 0, ''),
-        33: (4, 1, 2, 2, 9, '3dzMy7u6AO3t'),
-        34: (5.69, 0, 2, 5, 3, 'L1vi9K0fScA='),
-        35: (6.67, 0, 2, 7, 9, 'ALINAA4EoH7+/mBYCjAHYMEAlA4Av+7+INBZADoIYAA='),
-        36: (6.67, 0, 1, 7, 12, 'AAgAAJ79YG9brhjwoABPzCAAbv+gAAufUACg955bjzG//WAACgAAAAAA'),
-        37: (10.67, 0, 2, 11, 9, 'LOoADVAIsOQHsACpDWHiAAiw5KgAABzqTj3pAAANWqHzAAewxw5QAeIKofMAqAAt6QA='),
-        38: (8.67, 0, 2, 9, 9, 'AE36AAANgvUAANY/MAAK73AAB/9QpgP3rS9QbwHu0AP3K/1RB+/FvkA='),
-        39: (2.86, 0, 2, 3, 3, 'XzTyPxA='),
-        40: (4, 0, 2, 4, 11, 'AOoI8g6wP2BfQG8wX0A/YA6wCPIA6g=='),
-        41: (4, 0, 2, 4, 11, 'rgAvgAvgBvME9QP2BPUH8wvgL4CuAA=='),
-        42: (4.67, 0, 2, 5, 4, 'A/AMv8cd6QSywQ=='),
-        43: (7.02, 0, 3, 7, 7, 'AAYQAALyAAAvIAj///glb2UgAvIAABsQAA=='),
-        44: (3.33, 0, 9, 3, 4, 'L4L4CGDS'),
-        45: (4, 0, 7, 4, 2, 'j/g3cw=='),
-        46: (3.33, 0, 9, 3, 2, 'P4P4'),
-        47: (3.33, 0, 2, 4, 9, 'BPEH4ArADZAPYD8wbwCdAMoA'),
-        48: (6.67, 0, 2, 7, 9, 'BN+xAfteoF9AnwfyCPKPIH8n8gjyX0CvAPtfoATfsQA='),
-        49: (6.67, 0, 2, 7, 9, 'AK9wAcz3ACc/cAAD9wAAP3AAA/cAAD9wADb5MU///1A='),
-        50: (6.67, 0, 2, 7, 9, 'CO/CBfle0AAArwAAHtAAHPQAHfUADPQABvtVUZ///zA='),
-        51: (6.67, 0, 2, 7, 9, 'CO/DBvhu0AAArwACXqAAn9IAACzgAAB/OPhu4AnvxAA='),
-        52: (6.67, 0, 2, 7, 9, 'AAn4AAP/gADI+ABeH4AOUfgIwB+A3///kjNPkgAB+AA='),
-        53: (6.67, 0, 2, 7, 9, 'L//9A/gzME9AAAX8/UBdpu8QAAb0AAB/Nvlu4AnvwgA='),
-        54: (6.67, 0, 2, 7, 9, 'A8/TAOxdsE8wAAf57UCPtN4I8wfyX0B/Ifxe0ATfwgA='),
-        55: (6.67, 0, 2, 7, 9, 'f///IlVb8AAB9wAArgAAL3AACPEAAOwAAC+QAAT3AAA='),
-        56: (6.67, 0, 2, 7, 9, 'Bt/DA/k94G9AnwL4DNAH/+ME+DzhnxB/Rvg88Qjv1QA='),
-        57: (6.67, 0, 2, 7, 9, 'Bt+xA/tvsI8grwjyCPJPpO8wjtryAACfA+lvkAjvoAA='),
-        58: (4, 1, 4, 2, 7, '3d0AAADd3Q=='),
-        59: (4, 1, 4, 2, 9, '3d0AAADd3SuW'),
-        60: (7.02, 0, 4, 7, 5, 'AAN7dL/9k4+SAAS//JMAA3tw'),
-        61: (7.02, 0, 5, 7, 4, 'j///glVVUiRERCj///g='),
-        62: (7.02, 0, 4, 7, 5, 'e3MAA53/tAABn4Oc/7R7cwAA'),
-        63: (7.33, 0, 2, 7, 9, 'A8/oAe5p9l9QD5AACPQACvUABPUAAAAAAAf0AAB/QAA='),
-        64: (11.7, 0, 2, 11, 11, 'AAOt3ZEABsMABdEDwAAABaDDCNyJDh0HkA5Q47DSAOEdSg0wjQli0F3FvYAMQAAAAAA9QABMAAAq3dowAA=='),
-        65: (8.67, 0, 2, 9, 9, 'AA34AAAD/dAAAI9fIAANoPgAA/QK0ACP//8gDcRF+AP3AAzQjyAAfyA='),
-        66: (8.67, 0, 2, 9, 9, 'P//+kAP6RJ9wP4AC+QP7Va8wP///sgP4AB3gP4AArxP6RG/QP//+sgA='),
-        67: (8.67, 0, 2, 9, 9, 'AI3+gAC/pp+wP6AAjBb1AAAAf0AAAAb1AAAAL7AAexCvto/AAH3+kAA='),
-        68: (8.67, 0, 2, 9, 9, 'P//7MAP7V+9AP4AB/QP4AAvxP4AAnyP4AAvwP4AC/AP7V+8wP//8MAA='),
-        69: (8, 0, 2, 8, 9, 'P///9D+1VVE/gAAAP7VVUD////A/gAAAP4AAAD+1VVI////4'),
-        70: (7.33, 0, 2, 7, 9, 'P///4/tVVD+AAAP4AAA////D+1VUP4AAA/gAAD+AAAA='),
-        71: (9.33, 0, 2, 9, 9, 'AH3+oQCvto/QL7AAbCb1AAAAf0AP/5b1AET5L7AAD5Cvto32AH3+swA='),
-        72: (8.67, 0, 2, 8, 9, 'P4AA7T+AAO0/gADtP7Zm7T////0/gRHtP4AA7T+AAO0/gADt'),
-        73: (3.33, 0, 2, 3, 9, 'P4P4P4P4P4P4P4P4P4A='),
-        74: (6.67, 0, 2, 6, 9, 'AI/9ACXtAADtAADtAADtAADtjgDsb6j4Ce6g'),
-        75: (8.67, 0, 2, 9, 9, 'P4AD/AP4Av0AP4LtEAP53iAAP//0AAP8LuEAP4BPsAP4AJ9wP4AA3zA='),
-        76: (7.33, 0, 2, 7, 9, 'P4AAA/gAAD+AAAP4AAA/gAAD+AAAP4AAA/tVVT////A='),
-        77: (10, 0, 2, 10, 9, 'P/QAT/M/+ACP8z/NANzzP48h+fM/Xmbl8z9auqXzP1X+VfM/Uf8V8z9QzAXz'),
-        78: (8.67, 0, 2, 8, 9, 'P/EArT/4AK0/zxCtP2+QrT9Y8q0/UOqtP1B/zT9QDv0/UAb9'),
-        79: (9.33, 0, 2, 9, 9, 'AH3+oQCvtp/QL7AAf3b1AAH7f0AAD8b1AAH7L7AAf2Cftp/QAH3+kQA='),
-        80: (8, 0, 2, 8, 9, 'P//9YD+1bPM/gAP4P4AD+D+lXPM///1QP4AAAD+AAAA/gAAA'),
-        81: (9.33, 0, 2, 9, 11, 'AH3+kQCvtp/QL7AAf3b1AAH7f0AAD8X1AAD7L7AAb3CfpY/hAI7/sgAAC/dQAAAs/gA='),
-        82: (8.67, 0, 2, 9, 9, 'P//+oQP7VY+gP4AAzwP4AA3gP7VY+QP///kAP4AvsAP4AH9gP4AA3yA='),
-        83: (8, 0, 2, 8, 9, 'BM/9YB/ES+E/cAAAH/lRAAO//5AAAEz1AAAD926VW/MI3/xQ'),
-        84: (7.33, 0, 2, 8, 9, '3///80V/tVEAP4AAAD+AAAA/gAAAP4AAAD+AAAA/gAAAP4AA'),
-        85: (8.67, 0, 2, 8, 9, 'T3AAz09wAM9PcADPT3AAz09wAM9PcADeL6AB/Az4bPUBnvxQ'),
-        86: (8, 0, 2, 8, 9, 'zwAA/G9QBPYfkAnxC+ANsAbyL2AB938QALu7AABf9gAAD/EA'),
-        87: (11.33, 0, 2, 12, 9, '3QBvwAjzrxCf8Avwb0DL8g6wL3D19i9wDqPy2V8wC+bgnI8AB/qwb7wAA/+AP/gAAP9AD/QA'),
-        88: (8, 0, 2, 8, 9, 'X3AH9QvxH8AC+Z8wAI/5AAA/9QAAzu0ABvZfcB7ADPGfMAP5'),
-        89: (8, 0, 2, 8, 9, 'j0AE+A7ADOAF9E9QALzMAAAv8gAADeAAAA3gAAAN4AAADeAA'),
-        90: (7.33, 0, 2, 7, 9, 'P///wVVZ+AAB7QAAryAAX3AAH8AAC/IABvpVVa////A='),
-        91: (4, 0, 2, 4, 11, 'X/1fUV8wXzBfMF8wXzBfMF8wX1Ff/Q=='),
-        92: (3.33, 0, 2, 4, 9, 'yQCcAG8APyAPUA2ACrAH4ATx'),
-        93: (4, 0, 2, 4, 11, '3/UU9QP1A/UD9QP1A/UD9QP1FfXf9Q=='),
-        94: (7.02, 0, 2, 7, 5, 'AK+gAC9vIAmwuQH0BPGNAA2A'),
-        95: (6.67, -1, 12, 8, 1, 'GIiIhg=='),
-        96: (4, 0, 0, 4, 3, 'fyAMsAHj'),
-        97: (6.67, 0, 4, 7, 7, 'B++yAugvoAAAzQG+79CPMN0J9n/hLfpOoA=='),
-        98: (7.33, 0, 2, 7, 9, 'L3AAAvcAAC+c+wL+R/cvkA+y9wDtL5APsv439y+M+gA='),
-        99: (6.67, 0, 4, 7, 7, 'BM/VAfs78W9AAAfzAABvQAAB+zryBN/VAA=='),
-        100: (7.33, 0, 2, 7, 9, 'AAAvgAAC+Abuj4L7O/hvQD+H8wL4b0BPgvs7+Afub4A='),
-        101: (6.67, 0, 4, 7, 7, 'BN/CAfocwG9Abxf///NvQAAB+ivQBN/DAA=='),
-        102: (4, 0, 2, 5, 9, 'B/8A3SDP/wHsEA7AAOwADsAA7AAOwAA='),
-        103: (7.33, 0, 4, 7, 9, 'Bu5vgvs7+G9AP4fzAvhvQE+C+zv4B+5/cBEX8wrv1gA='),
-        104: (7.33, 0, 2, 7, 9, 'L3AAAvcAAC+L+wL+WfYvkB+S9wD5L3APkvcA+S9wD5A='),
-        105: (3.33, 0, 2, 3, 9, 'L3AxL3L3L3L3L3L3L3A='),
-        106: (3.33, -1, 2, 4, 11, 'AvcAMQL3AvcC9wL3AvcC9wL3Bvcv0Q=='),
-        107: (6.67, 0, 2, 7, 9, 'L3AAAvcAAC9wryL3b0Avv4AC//sAL5f0AvcO0C9wb2A='),
-        108: (3.33, 0, 2, 3, 9, 'L3L3L3L3L3L3L3L3L3A='),
-        109: (10.67, 0, 4, 10, 7, 'L3z4TuMv1d+l/C+Qf0DOL3BvML4vcG8wvi9wbzC+L3BvML4='),
-        110: (7.33, 0, 4, 7, 7, 'L3v7Av5Z9i+QH5L3APkvcA+S9wD5L3APkA=='),
-        111: (7.33, 0, 4, 7, 7, 'A8/XAew49W9QD7fzAO1vUA+x7Dj1A8/WAA=='),
-        112: (7.33, 0, 4, 7, 9, 'L4z6Av5H9y+QD7L3AO0vkA+y/jf3L5z6AvcAAC9wAAA='),
-        113: (7.33, 0, 4, 7, 9, 'Bu5/gfs7+G9AP4fzAvhvQE+C+zv4B+5/gAAC+AAAL4A='),
-        114: (4.67, 0, 4, 5, 7, 'L41y/nMvoAL3AC9wAvcAL3AA'),
-        115: (6.67, 0, 4, 7, 7, 'B+/DA/YrwD+0EACP/4AAA78V5BnxCe/VAA=='),
-        116: (4, 0, 3, 4, 8, 'C5Df/C+RD5APkA+QD8IJ+w=='),
-        117: (7.33, 0, 4, 7, 7, 'T2AvhPYC+E9gL4T2Avg/cE+B/Uv4B+1PgA=='),
-        118: (6.67, 0, 4, 7, 7, 'zgA/d/MI8i9w3ADbH3AH9vEAL+wAAN9wAA=='),
-        119: (9.33, 0, 4, 10, 7, '6QX6BPOsCd4H8H8MfxrAPz8tXYAPrgmvQAv7Bv8ACPcC/AA='),
-        120: (6.67, 0, 4, 7, 7, 'f0CfIM0/cAP/wAAM9gAE/eEA6x+gnyB/QA=='),
-        121: (6.67, 0, 4, 7, 9, 'vwA/dfQI8Q+AzACtH2AE9/EADusAAJ9gATzhAF/UAAA='),
-        122: (6, 0, 4, 6, 7, 'T//0Az3xAG9gAewACvIAT6Mxj//5'),
-        123: (4.67, 0, 2, 5, 11, 'Ad9gb2AH8QB/EBvwDfUALOAAfxAH8QBvYAHfYA=='),
-        124: (3.36, 0, 2, 3, 12, 'H3H3H3H3H3H3H3H3H3H3H3H3'),
-        125: (4.67, 0, 2, 5, 11, 'z5ABrxAG8gBvIAT3AAr3BPgQbyAG8gGvEM+QAA=='),
-        126: (7.02, 0, 6, 7, 2, 'XvpUVVSe5Q=='),
-        183: (4, 0, 6, 3, 2, 'LGL4'),
-        223: (7.33, 0, 2, 7, 9, 'As/nAN1J8x+AbzL3P4Avd/MC9x30L3Ad0vcyvi96/lA='),
-        224: (6.67, 0, 0, 7, 11, 'B/MAAAuwAAAeQAAAAAAH77ED6C+QAADcAb/v0J8g7Qn1f+Et+V6Q'),
-        225: (6.67, 0, 0, 7, 11, 'AAnxAAL1AACpAAAAAAAH77ED6C+QAADcAb/v0J8g7Qn1f+Et+V6Q'),
-        226: (6.67, 0, 0, 7, 11, 'AJ9AAC5dAApgtQAAAAAH77ED6C+QAADcAb/v0J8g7Qn1f+Et+V6Q'),
-        228: (6.67, 0, 2, 7, 9, 'CpHyAAAAAAfvsQPoL5AAANwBv+/QnyDtCfV/4S35XpA='),
-        229: (6.67, 0, 0, 7, 11, 'AKxQACobAAC8UAAAAAAH77ED6C+QAADcAb/v0J8g7Qn1f+Et+V6Q'),
-        230: (10.67, 0, 4, 11, 7, 'Bt/I37EC+R35HaAAAK8gfwCu7///8X9AvzERCPZu+SzAHPwm78IA'),
-        231: (6.67, 0, 4, 7, 9, 'BM/VAfs78W9AAAfzAABvQAAB+zryBN/VAATTAACNYAA='),
-        232: (6.67, 0, 0, 7, 11, 'A/cAAAfxAAALgAAAAAAE38IB+hzAb0BvF///829AAAH6K9AE38MA'),
-        233: (6.67, 0, 0, 7, 11, 'AAX0AADZAABsAAAAAAAE38IB+hzAb0BvF///829AAAH6K9AE38MA'),
-        234: (6.67, 0, 0, 7, 11, 'AH9gAB5OAAiAlwAAAAAE38IB+hzAb0BvF///829AAAH6K9AE38MA'),
-        235: (6.67, 0, 2, 7, 9, 'B8DlAAAAAATfwgH6HMBvQG8X///zb0AAAfor0ATfwwA='),
-        236: (3.33, -1, 0, 4, 11, 'P2AI4ADHAAAC+AL4AvgC+AL4AvgC+A=='),
-        237: (3.33, 0, 0, 4, 11, 'AvgKwD4QAAAvgC+AL4AvgC+AL4AvgA=='),
-        238: (3.33, -1, 0, 5, 11, 'A/oAxeJbBqAAAAL4AC+AAvgAL4AC+AAvgAL4AA=='),
-        239: (3.33, -1, 2, 5, 9, 'PwuQAAAC+AAvgAL4AC+AAvgAL4AC+AA='),
-        241: (7.33, 0, 1, 7, 10, 'AustAHZekAAAAAL3v7Av5Z9i+QH5L3APkvcA+S9wD5L3APk='),
-        242: (7.33, 0, 0, 7, 11, 'AOsAAAT0AAAHwAAAAAADz9cB7Dj1b1APt/MA7W9QD7HsOPUDz9YA'),
-        243: (7.33, 0, 0, 7, 11, 'AAH5AACdAAAuIAAAAAADz9cB7Dj1b1APt/MA7W9QD7HsOPUDz9YA'),
-        244: (7.33, 0, 0, 7, 11, 'AE+QAAxeIAWwagAAAAADz9cB7Dj1b1APt/MA7W9QD7HsOPUDz9YA'),
-        246: (7.33, 0, 2, 7, 9, 'A/C5AAAAAAPP1wHsOPVvUA+38wDtb1APsew49QPP1gA='),
-        248: (7.33, 0, 3, 8, 9, 'AAAAIAPP6rAew59gb1LfsH9MPtBv1g+wH+KPUGvP1gAgAAAA'),
-        249: (7.33, 0, 0, 7, 11, 'A/cAAAjgAAALgAAAAABPYC+E9gL4T2AvhPYC+D9wT4H9S/gH7U+A'),
-        250: (7.33, 0, 0, 7, 11, 'AAH5AACtAAAuIAAAAABPYC+E9gL4T2AvhPYC+D9wT4H9S/gH7U+A'),
-        251: (7.33, 0, 0, 7, 11, 'AE+QAA1eIAWwagAAAABPYC+E9gL4T2AvhPYC+D9wT4H9S/gH7U+A'),
-        252: (7.33, 0, 2, 7, 9, 'BPC5AAAAAE9gL4T2AvhPYC+E9gL4P3BPgf1L+AftT4A='),
-        253: (6.67, 0, 0, 7, 13, 'AAb0AADoAAB8AAAAAAC/AD919AjxD4DMAK0fYAT38QAO6wAAn2ABPOEAX9QAAA=='),
-        255: (6.67, 0, 2, 7, 11, 'CMD1AAAAAL8AP3X0CPEPgMwArR9gBPfxAA7rAACfYAE84QBf1AAA'),
-        339: (11.33, 0, 4, 11, 7, 'A8/XfvkB7Dj/U/ZvUA/wC8fzAO///m9QD+EREew4/2PpA8/WfvoQ'),
-        8211: (6.67, 0, 7, 7, 2, 'r///UTMzMA=='),
-        8212: (12, 0, 7, 12, 2, '////////MzMzMzMz'),
-        8216: (3.33, 0, 2, 3, 4, 'DDHQL4P4'),
-        8217: (3.33, 0, 2, 3, 4, 'L4L3CGDR'),
-        8220: (6, 0, 2, 6, 4, 'C1LQDgdwH5nxH5nx'),
-        8221: (6, 0, 2, 6, 4, 'H5nxH5nxB3DgDSWg'),
-        8230: (12, 1, 9, 10, 2, 'vwDdAPq/AN0A+g=='),
-        8722: (7.02, 0, 6, 7, 2, 'j///glVVUg=='),
-        9642: (4.25, 0, 6, 4, 3, 'X/lf+V/5'),
-    },
-    ('sans_b', 11): {
-        32: (3.06, 0, 0, 0, 0, ''),
-        33: (3.66, 1, 2, 2, 8, '+ejo19cA+fk='),
-        34: (5.22, 0, 2, 5, 3, 'Ty9z8eYvHVA='),
-        35: (6.12, 0, 2, 6, 8, 'ANB2AqCibuz7CEDACxOQr87YGwowSA0A'),
-        36: (6.12, 0, 1, 6, 10, 'ACQACv+xf1fYjkYALv1wAY36ADaOnGe8LP/CACUA'),
-        37: (9.78, 0, 2, 10, 8, 'LdYAiQCYPgLhALYfC1AAmD5cnbAt1+XwxQAJhNCnAD0C8MUA1ACdsA=='),
-        38: (7.94, 0, 2, 8, 8, 'AH7lAADzfQAA9cgAAu9gAC6/M8B+CduQXzL/UgnvqOg='),
-        39: (2.61, 0, 2, 3, 3, 'bwXwTgA='),
-        40: (3.66, 0, 2, 4, 10, 'AvULwB9gXyBvEG8QXyAfYAvAAvU='),
-        41: (3.66, 0, 2, 4, 10, 'rAAvUAuwCPAG8QbxCPALwC9QrAA='),
-        42: (4.28, 0, 2, 5, 4, 'BrAMzeEe5ASVgA=='),
-        43: (6.42, 0, 3, 6, 7, 'ABIAAG0AAG0Aj///E40zAG0AACUA'),
-        44: (3.06, 0, 8, 3, 4, 'P1P1CjDQ'),
-        45: (3.66, 0, 6, 4, 2, 'n/MlUQ=='),
-        46: (3.06, 0, 8, 3, 2, 'T0T0'),
-        47: (3.06, 0, 2, 3, 8, 'BtCqDXD0PxbgmwyA'),
-        48: (6.12, 0, 2, 6, 8, 'B+5wL3bzfwD4jwDajwDZbwD4H3bzBu9w'),
-        49: (6.12, 0, 2, 6, 8, 'CO8QO68QAH8QAH8QAH8QAH8QAo8xX//9'),
-        50: (6.12, 0, 2, 6, 8, 'Ce6gb2b2AAD3AAnyAK9gCvQAX4Myr//6'),
-        51: (6.12, 0, 2, 6, 8, 'Cu+gb2b3AAP1AM+QACb2AADaj1X4Gv6g'),
-        52: (6.12, 0, 2, 7, 8, 'AA7wAAnvAAPn8ADVbwCLBvAN///xEifyAABvAA=='),
-        53: (6.12, 0, 2, 6, 8, 'P//2T0IgXxAAX8+xS2X5AADMf1X4Cv6g'),
-        54: (6.12, 0, 2, 6, 8, 'Be+gH5XkbwAAjq+xj1P4fwDaL4T3Bd+g'),
-        55: (6.12, 0, 2, 6, 8, 'j//6EzT3AAjQAC9QAJ4AAPgAA/QABfMA'),
-        56: (6.12, 0, 2, 6, 8, 'Ce+xb1P4T0L2Cv+wX0P3ngDLf0L5Ce+h'),
-        57: (6.12, 0, 2, 6, 8, 'Ce5wb2b0ngDof1X6CvzaAADoTmjzCv5g'),
-        58: (3.66, 1, 4, 2, 6, '+fkAAPn5'),
-        59: (3.66, 1, 4, 2, 8, '+fkAAPn5WLM='),
-        60: (6.42, 0, 4, 6, 5, 'AASNOv6ljmAAOv6lAASN'),
-        61: (6.42, 0, 5, 6, 3, 'j///EiIij///'),
-        62: (6.42, 0, 4, 6, 5, 'e2EAKM/IAAO/KM/He2EA'),
-        63: (6.72, 0, 2, 7, 8, 'B+/EBfhM8AAArgAAnkAAbxAAAAAAAK4AAArgAA=='),
-        64: (10.72, 0, 2, 11, 10, 'AAa7y0AAC3AAG1AIcruNHQDQwwegwEkdAIYNBYHQHjSgSQnKbKEA0AAAAAAGsQAZQAAFzMxQAA=='),
-        65: (7.94, 0, 2, 8, 8, 'AC/xAAB+9gAA2rwAAvVvEAjwH3AN///AP3M48o8QAfc='),
-        66: (7.94, 0, 2, 8, 8, 'T//9QE9yPeBPUAvQT///QE9yOfJPUAL2T3I580///WA='),
-        67: (7.94, 0, 2, 8, 8, 'Aq79YA3mSORfUAAAfxAAAH8QAABPUAAADOZI5AGu/XA='),
-        68: (7.94, 0, 2, 8, 8, 'T//pEE9zf8BPUAb0T1AC909QAvZPUAfzT3N/sE//6QA='),
-        69: (7.34, 0, 2, 7, 8, 'T///tPczMk9QAAT///VPczMU9QAAT3MzNP///g=='),
-        70: (6.72, 0, 2, 7, 8, 'T///VPczMU9QAAT///NPczME9QAAT1AABPUAAA=='),
-        71: (8.56, 0, 2, 8, 8, 'Aa79gA3mR+ZfUAAAfxAAAH8Qb/5PUBKuDeZG7QGu/YE='),
-        72: (7.94, 0, 2, 8, 8, 'T1AG809QBvNPUAbzT///80+FWfNPUAbzT1AG809QBvM='),
-        73: (3.06, 0, 2, 3, 8, 'T1T1T1T1T1T1T1T1'),
-        74: (6.12, 0, 2, 6, 8, 'AL/1ACb1AAP1AAP1AAP1AAP1nlnyLP5g'),
-        75: (7.94, 0, 2, 8, 8, 'T1AL4k9QrzBPWfMAT9+AAE/b8wBPUN0QT1AvsE9QBvc='),
-        76: (6.72, 0, 2, 7, 8, 'T1AABPUAAE9QAAT1AABPUAAE9QAAT3MzFP//9g=='),
-        77: (9.16, 0, 2, 9, 8, 'T/AA32T+QB/2T7kGv2T30Kf2Ty8vL2TyutD2Tyb5D2TyL0D2'),
-        78: (7.94, 0, 2, 8, 8, 'T8AD80/1A/NPvQPzTz9j808o5PNPIerzTyB/808gDvM='),
-        79: (8.56, 0, 2, 9, 8, 'Aa79UADOZK9gT1AA3QfxAAnwjxAAnwX2AA3QDfZK9QAa78UA'),
-        80: (7.34, 0, 2, 7, 8, 'T//7JPc17E9QCuT3NetP//sU9QAAT1AABPUAAA=='),
-        81: (8.56, 0, 2, 9, 10, 'Aa79UADPZK9gT1AA3QfxAAnwfxAAnwT1AA3QDeY59gAa/+YAAAL7MQAABu9A'),
-        82: (7.94, 0, 2, 8, 8, 'T//9YE9zS/JPUAT0T3NL8U///kBPUI8wT1AOwE9QBfY='),
-        83: (7.34, 0, 2, 7, 8, 'Bt/qEvgl509wAADP6lAASN+AAADNbmNOsJ7+oQ=='),
-        84: (6.72, 0, 2, 7, 8, '7///kzj1MgB/IAAH8gAAfyAAB/IAAH8gAAfyAA=='),
-        85: (7.94, 0, 2, 8, 8, 'X0AF9F9ABfRfQAX0X0AF9F9ABfRPUAbyDtVewAO/6hA='),
-        86: (7.34, 0, 2, 8, 8, 'zgAI8W8gDbAfcB9gC8BvEAXxuwAA9vUAAK7wAABPoAA='),
-        87: (10.38, 0, 2, 11, 8, '2wDPMF9K4A/2CPBvE/qQvAL0bX0OgA55k/L0AKvGD48ABu8gzcAAL/AJ+AA='),
-        88: (7.34, 0, 2, 8, 8, 'X0AOsAvQjyAC+fgAAH/gAAC/8gAF9OsAHqBfUJ8QC+A='),
-        89: (7.34, 0, 2, 8, 8, 'jxAL0B6AP1AH4KwAAOj0AABvsAAAH3AAAB9wAAAfcAA='),
-        90: (6.72, 0, 2, 7, 8, 'T///MDM+0AAI8wAD9wAB6wAArhAAb4MzGv//9g=='),
-        91: (3.66, 0, 2, 4, 10, 'b/hvAG8AbwBvAG8AbwBvAG8Qb/g='),
-        92: (3.06, 0, 2, 3, 8, 'xwmgbgPxD0DXCqB9'),
-        93: (3.66, 0, 2, 4, 10, '3/AG8AbwBvAG8AbwBvAG8Abw3/A='),
-        94: (6.42, 0, 2, 7, 5, 'AN9AAE6LAAtx8gLxCoCKAE4A'),
-        95: (6.12, -1, 11, 8, 1, 'CIiIgQ=='),
-        96: (3.66, 0, 0, 4, 3, 'jgANcAPg'),
-        97: (6.12, 0, 4, 7, 6, 'LP+QAABPQBzt9QnwP2CfKvYC33ni'),
-        98: (6.72, 0, 2, 7, 8, 'P0AAA/QAAD+O5gP6G/A/QF8z9AXzP6G/BPfuUA=='),
-        99: (6.12, 0, 4, 6, 6, 'Bu+hP2LofwAAfxAAP3LpB+6h'),
-        100: (6.72, 0, 2, 6, 8, 'AACfAACfCf2vT3LffxCffxCfT3LvCfyv'),
-        101: (6.12, 0, 4, 6, 6, 'B+6gPzDnf//6fxAAP3LmB++g'),
-        102: (3.66, 0, 2, 4, 8, 'CfoPoN/7D4APgA+AD4APgA=='),
-        103: (6.72, 0, 4, 6, 8, 'Cf2fT3LvfxCffxCfT3LvCvyuAADMGv/C'),
-        104: (6.72, 0, 2, 7, 8, 'P0AAA/QAAD9+5QP7POA/UH8D9AfwP0B/A/QH8A=='),
-        105: (3.06, 0, 2, 3, 8, 'P0AQP0P0P0P0P0P0'),
-        106: (3.06, -1, 2, 4, 10, 'A/QAEAP0A/QD9AP0A/QD9Ab0L8A='),
-        107: (6.12, 0, 2, 7, 8, 'P0AAA/QAAD9C6AP12gA/7xAD+uoAP0bzA/QMwA=='),
-        108: (3.06, 0, 2, 3, 8, 'P0P0P0P0P0P0P0P0'),
-        109: (9.78, 0, 4, 10, 6, 'T37jz3A/pP5L8D9Q2wbxP0DbBvE/QNsG8T9A2wbx'),
-        110: (6.72, 0, 4, 7, 6, 'T27lA/s84D9QfwP0B/A/QH8D9Afw'),
-        111: (6.72, 0, 4, 7, 6, 'Bt/DA/cb4H8QXzfxBfM/cb4Abfww'),
-        112: (6.72, 0, 4, 7, 8, 'T47mA/ob8D9AXzP0BfM/ob8D+O5QP0AAA/QAAA=='),
-        113: (6.72, 0, 4, 6, 8, 'Cf2vT3LvfxCffxCfT3LvCfyvAACPAACP'),
-        114: (4.28, 0, 4, 5, 6, 'T48T/EA/UAP0AD9AA/QA'),
-        115: (6.12, 0, 4, 6, 6, 'Ce+xTyByL+lQAnv3NgDZLP+x'),
-        116: (3.66, 0, 3, 4, 7, 'DFDf9y9QL1AvUB+AC/c='),
-        117: (6.72, 0, 4, 6, 6, 'XzCfXzCfXzCfTzCfP4PvCvyP'),
-        118: (6.12, 0, 4, 7, 6, 'zACuBvEPgB9k8gC6nAAG/nAAH/EA'),
-        119: (8.56, 0, 4, 9, 6, '5wrzDnqw7XLzbi9rXgL4svmgDucO5gCvMK8g'),
-        120: (6.12, 0, 4, 6, 6, 'fyH5DLrQAv8wA/9ADajhnhDa'),
-        121: (6.12, 0, 4, 7, 8, 'vQCuBfIPgA508gCcjAAC/XAADPEAA+oABvwQAA=='),
-        122: (5.5, 0, 4, 6, 6, 'X//QAU+AAMwACPIAT3EQn//x'),
-        123: (4.28, 0, 2, 5, 10, 'BO8AnxAJ0ADMAN8wAdsACdAAnQAI4QA+8A=='),
-        124: (3.08, 0, 2, 3, 10, 'L0L0L0L0L0L0L0L0L0L0'),
-        125: (4.28, 0, 2, 5, 10, 'z3AAvQAI4AB/IADfEG8wCOAAjgAL0Az2AA=='),
-        126: (6.42, 0, 5, 7, 2, 'XucnBTS/wA=='),
-        183: (3.66, 0, 5, 3, 2, 'KjT0'),
-        223: (6.72, 0, 2, 7, 8, 'Bd/DAPkssD9B6QP0rAA/SPUD9AnzP0IvU/XfsA=='),
-        224: (6.12, 0, 0, 7, 10, 'CeAAAA5gAAA+AAAAAAAs/oAAAF8wLO31CeA/UK8q9gPuauE='),
-        225: (6.12, 0, 0, 7, 10, 'AA2QAAbhAADUAAAAAAAs/oAAAF8wLO31CeA/UK8q9gPuauE='),
-        226: (6.12, 0, 0, 7, 10, 'AM0AAEuWAAwx0AAAAAAs/oAAAF8wLO31CeA/UK8q9gPuauE='),
-        228: (6.12, 0, 2, 7, 8, 'DGawAAAAACz+gAAAXzAs7fUJ4D9Qryr2A+5q4Q=='),
-        229: (6.12, 0, 0, 7, 10, 'AbsQAFZlAAG7EAAAAAAs/oAAAF8wLO31CeA/UK8q9gPuauE='),
-        230: (9.78, 0, 4, 10, 6, 'G/+r/VAAAvwG8Rvt///0jxH6AACfOP4X4C36K/1Q'),
-        231: (6.12, 0, 4, 6, 8, 'Bu+hP2LofwAAfxAAP3LpB+6hAIkAAJ0Q'),
-        232: (6.12, 0, 0, 6, 10, 'BfIAAKoAAB4gAAAAB+6gPzDnf//6fxAAP3LmB++g'),
-        233: (6.12, 0, 0, 6, 10, 'AArQAC8wAKgAAAAAB+6gPzDnf//6fxAAP3LmB++g'),
-        234: (6.12, 0, 0, 6, 10, 'AK8QAteAClDRAAAAB+6gPzDnf//6fxAAP3LmB++g'),
-        235: (6.12, 0, 2, 6, 8, 'CYTgAAAAB+6gPzDnf//6fxAAP3LmB++g'),
-        236: (3.06, -1, 0, 4, 10, 'P0AJwADUAAAD9AP0A/QD9AP0A/Q='),
-        237: (3.06, 0, 0, 4, 10, 'BPMMkE0AAAA/QD9AP0A/QD9AP0A='),
-        238: (3.06, -1, 0, 5, 10, 'BfYAxdBKCVAAAAP0AD9AA/QAP0AD9AA/QA=='),
-        239: (3.06, -1, 2, 5, 8, 'Pw5AAAAD9AA/QAP0AD9AA/QAP0A='),
-        241: (6.72, 0, 1, 7, 9, 'BOdHAJKOIAAAAAT27lA/s84D9QfwP0B/A/QH8D9AfwA='),
-        242: (6.72, 0, 0, 7, 10, 'AvYAAAfQAAAMYAAAAAAG38MD9xvgfxBfN/EF8z9xvgBt/DA='),
-        243: (6.72, 0, 0, 7, 10, 'AAbyAADXAABsAAAAAAAG38MD9xvgfxBfN/EF8z9xvgBt/DA='),
-        244: (6.72, 0, 0, 7, 10, 'AH8wAA5bAAdwwwAAAAAG38MD9xvgfxBfN/EF8z9xvgBt/DA='),
-        246: (6.72, 0, 2, 7, 8, 'BsDxAAAAAAbfwwP3G+B/EF838QXzP3G+AG38MA=='),
-        248: (6.72, 0, 3, 7, 8, 'AAAAEG38wj9x7gfxqvN/pl8z+xvgW9/DAgAAAA=='),
-        249: (6.72, 0, 0, 6, 10, 'BfIAALoAAB4gAAAAXzCfXzCfXzCfTzCfP4PvCvyP'),
-        250: (6.72, 0, 0, 6, 10, 'AAbxAA5wAGsAAAAAXzCfXzCfXzCfTzCfP4PvCvyP'),
-        251: (6.72, 0, 0, 6, 10, 'AI8wAeWwB3DCAAAAXzCfXzCfXzCfTzCfP4PvCvyP'),
-        252: (6.72, 0, 2, 6, 8, 'BsHxAAAAXzCfXzCfXzCfTzCfP4PvCvyP'),
-        253: (6.12, 0, 0, 7, 12, 'AArQAALzAACnAAAAAAC9AK4F8g+ADnTyAJyMAAL9cAAM8QAD6gAG/BAA'),
-        255: (6.12, 0, 2, 7, 10, 'CYTgAAAAAL0ArgXyD4AOdPIAnIwAAv1wAAzxAAPqAAb8EAA='),
-        339: (10.38, 0, 4, 11, 6, 'Bt/FzsID9xv3CsB/EF///wfxBfUAAD9xv7G6AG37XPwg'),
-        8211: (6.12, 0, 6, 6, 2, 'r//8ERER'),
-        8212: (11, 0, 6, 11, 2, '///////xERERERE='),
-        8216: (3.06, 0, 2, 3, 4, 'DRKwP0T0'),
-        8217: (3.06, 0, 2, 3, 4, 'P1P0CjDQ'),
-        8220: (5.5, 0, 2, 5, 4, 'DCdhwMEvXaP16g=='),
-        8221: (5.5, 0, 2, 5, 4, 'L22y9doJRJDQpA=='),
-        8230: (11, 1, 8, 9, 2, 'zAT0DMzAT0DM'),
-        8722: (6.42, 0, 6, 6, 2, 'j///EzMz'),
-        9642: (3.91, 0, 5, 4, 3, 'b/Vv9W/1'),
-    },
-    ('sans_b', 10): {
-        32: (2.78, 0, 0, 0, 0, ''),
-        33: (3.33, 0, 3, 3, 7, 'D1D1D0D0DjAAH1A='),
-        34: (4.73, 0, 3, 5, 3, 'Xz8E4/A+LwA='),
-        35: (5.56, 0, 3, 6, 7, 'AaDABXCwbs3UCwgwrr+xOAwAVioA'),
-        36: (5.56, 0, 2, 6, 9, 'AEAALP6gnHIwfqIACe+gAHT1AHP1bv6QAGEA'),
-        37: (8.89, 0, 3, 9, 7, 'TdMC0AtWoMMApWppAATdXW3CAAtMR4AFoMR4AdEF3CA='),
-        38: (7.22, 0, 3, 7, 7, 'AL7BAD0NQAH7sAC/sLN9L48H0G+xG+2M0A=='),
-        39: (2.38, 0, 3, 2, 3, 'fWxc'),
-        40: (3.33, 0, 3, 4, 9, 'BeEOcD8QbgB9AG4APxAOcAXh'),
-        41: (3.33, 0, 3, 3, 9, 'qgLzDJCcCMCcDJLzqgA='),
-        42: (3.89, 0, 3, 4, 4, 'CHDN2y7hV4Q='),
-        43: (5.84, 0, 4, 6, 6, 'AJcAAKcAn//3AagQAKcAAAAA'),
-        44: (2.78, 0, 9, 3, 3, 'TxDBHAA='),
-        45: (3.33, 0, 7, 3, 2, 'n/Ey'),
-        46: (2.78, 0, 9, 3, 1, 'XxA='),
-        47: (2.78, 0, 3, 3, 7, 'CZDGDyPwbAmQxgA='),
-        48: (5.56, 0, 3, 6, 7, 'Cf0wXznQjQTwnAPyjQTwTznACO0w'),
-        49: (5.56, 0, 3, 6, 7, 'CPsAScsAAKsAAKsAAKsAAKsAb//0'),
-        50: (5.56, 0, 3, 6, 7, 'C/5QbjnwAAjgAG9QB/UAT2Igr//y'),
-        51: (5.56, 0, 3, 6, 7, 'G/5QfjrwAAjQAP9AABjxnTfxG/5w'),
-        52: (5.56, 0, 3, 6, 7, 'AD+QAM6QBquQHiuQmAuQ3//4AAuQ'),
-        53: (5.56, 0, 3, 6, 7, 'T//gXwAAb95wSDjxAALzjjjxG/1Q'),
-        54: (5.56, 0, 3, 6, 7, 'B+5QP0nAjQAAnc+AjibyTyfxCO5g'),
-        55: (5.56, 0, 3, 6, 7, 'n//yEijQAB9AAJsAAfUABfAAB+AA'),
-        56: (5.56, 0, 3, 6, 7, 'C/5gbxfwXxjgDP9gjQXxnQXyG/5w'),
-        57: (5.56, 0, 3, 6, 7, 'G/0wjijQnhfxLPryAATxXjvAC/wg'),
-        58: (3.33, 0, 5, 3, 5, 'D2AAAAAAD2A='),
-        59: (3.33, 0, 5, 3, 7, 'D2AAAAAAD2B1DBA='),
-        60: (5.84, 0, 4, 6, 5, 'AAWmOvxhnTAAOvxhAAWm'),
-        61: (5.84, 0, 5, 6, 3, 'n//3EiIhn//3'),
-        62: (5.84, 0, 4, 6, 5, 'ikAAF96SAAXnF96SikAA'),
-        63: (6.11, 0, 3, 6, 7, 'Ce+gX0P2AAH2AB2wAKsAAAAAANgA'),
-        64: (9.75, 0, 3, 10, 9, 'ABm7tgACsgAIgAsVurLAORsB8JJWVwKwsVZnCJGwKhy1yyAKUAAAAACLupQA'),
-        65: (7.22, 0, 3, 7, 7, 'AG+gAAy/AALy5QB8CbAN//8T8xHmnQAKwA=='),
-        66: (7.22, 0, 3, 7, 7, 'X//pBfIV9F8QTzX//6BfIS2V8hLaX//7IA=='),
-        67: (7.22, 0, 3, 7, 7, 'A8/qEfo0yH8AAAjgAAB/AAAB+jTJA7/7IA=='),
-        68: (7.22, 0, 3, 7, 7, 'X//EBfMo818QDaXxAKxfEA2l8yj0X//VAA=='),
-        69: (6.67, 0, 3, 7, 7, 'X///FfMREF8QAAX//8BfMREF8xEQX///QA=='),
-        70: (6.11, 0, 3, 6, 7, 'X//8XzERXxAAX//6XzERXxAAXxAA'),
-        71: (7.78, 0, 3, 8, 7, 'A777IB+zTKB/AAAAjgDf8n8QA/IfsznxA7/7MA=='),
-        72: (7.22, 0, 3, 7, 7, 'XxAOhfEA6F8QDoX///hfQz6F8QDoXxAOgA=='),
-        73: (2.78, 0, 3, 3, 7, 'XxXxXxXxXxXxXxA='),
-        74: (5.56, 0, 3, 5, 7, 'AO/gAZ4ACeAAngAJ2cPLPfwg'),
-        75: (7.22, 0, 3, 8, 7, 'XxBPYF8U9gBfb2AAX/9gAF838wBfEL0QXxAesA=='),
-        76: (6.11, 0, 3, 6, 7, 'XxAAXxAAXxAAXxAAXxAAXzERX//8'),
-        77: (8.33, 0, 3, 8, 7, 'X7AG+l7gC+pftQ6qX2pLql8elqpfDPKqXwfQqg=='),
-        78: (7.22, 0, 3, 7, 7, 'X5ALhf8guF6rC4Xx9LhfCNuF8A74XwBvgA=='),
-        79: (7.78, 0, 3, 8, 7, 'A77qEB+zTcB/EATzjgAC9W8QBPMes03AA7/qEA=='),
-        80: (6.67, 0, 3, 7, 7, 'X//mBfMo8l8QL0XzGPFf/+YF8QAAXxAAAA=='),
-        81: (7.78, 0, 3, 8, 9, 'A77qEB+zTcBvEATzjgAC9X8ABPMfoj3QA8/7EAAH9BAAAL+Q'),
-        82: (7.22, 0, 3, 7, 7, 'X//7FfMj6V8yPoX//6BfEOkF8QbyXxANsA=='),
-        83: (6.67, 0, 3, 7, 7, 'CO/VBPMJ0E+DAABs/4AAAH830xbyCu/WAA=='),
-        84: (6.11, 0, 3, 6, 7, '7///EbwRAKwAAKwAAKwAAKwAAKwA'),
-        85: (7.22, 0, 3, 7, 7, 'bwANlvAA2W8ADZbwANlfEA6C+Sf0Bd/WAA=='),
-        86: (6.67, 0, 3, 7, 7, 'ywAfZvEF8Q9QqwCqD1AE9fAADskAAJ9AAA=='),
-        87: (9.44, 0, 3, 10, 7, '2QL6AvScBu4F8F8KnynAHz1NXIANjwqfQAntBu8ABfkC/AA='),
-        88: (6.67, 0, 3, 7, 7, 'byB/ELsfYAH9wAAL9wAE+uEA6A2gngBPQA=='),
-        89: (6.67, 0, 3, 7, 7, 'jgBPMNgNkAT34QAK9QAAbxAABvEAAG8QAA=='),
-        90: (6.11, 0, 3, 6, 7, 'X//6Aib0AB5wAMsACeEAX1Ihv//9'),
-        91: (3.33, 0, 3, 4, 9, 'f+J9AH0AfQB9AH0AfQB9AH/z'),
-        92: (2.78, 0, 3, 3, 7, 'xQmQbAPwDyDGCZA='),
-        93: (3.33, 0, 3, 3, 9, 'z8CMCMCMCMCMCMCM38A='),
-        94: (5.84, 0, 3, 6, 4, 'Av4ACYtgHhPgiQC2'),
-        95: (5.56, -1, 11, 7, 1, 'CIiIUA=='),
-        96: (3.33, 0, 2, 3, 2, 'bQB5'),
-        97: (5.56, 0, 5, 6, 5, 'LO5QAQnQTc3grAvgXuXo'),
-        98: (6.11, 0, 3, 6, 7, 'TxAATxAAT4/BT1HoTxDKT0HoX47B'),
-        99: (5.56, 0, 5, 6, 5, 'Ce5gbxXxnQAAbxTxCe5g'),
-        100: (6.11, 0, 3, 6, 7, 'AAD2AAD2C+n2bxP2nQD2fxP2HOnm'),
-        101: (5.56, 0, 5, 6, 5, 'Ct1QbwTwn93SbxAACu6Q'),
-        102: (3.33, 0, 3, 4, 7, 'CvQPUM/1H1AfUB9QH1A='),
-        103: (6.11, 0, 5, 6, 7, 'C+nmbxP2nQD2fyP2HOn2AgL0G+6Q'),
-        104: (6.11, 0, 3, 6, 7, 'TxAATxAAT4/BT2L2TxDnTxDnTxDn'),
-        105: (2.78, 0, 3, 3, 7, 'TxAATxTxTxTxTxA='),
-        106: (2.78, -1, 3, 4, 9, 'BPEAAATxBPEE8QTxBPEF8S+w'),
-        107: (5.56, 0, 3, 6, 7, 'TxAATxAATxjRT34QT+4ATx2QTxP0'),
-        108: (2.78, 0, 3, 3, 7, 'TxTxTxTxTxTxTxA='),
-        109: (8.89, 0, 5, 9, 5, 'X3+n+wT2b3TzTxPyH0TxPyH0TxPyH0A='),
-        110: (6.11, 0, 5, 6, 5, 'X3/BT2L2TxDnTxDnTxDn'),
-        111: (6.11, 0, 5, 6, 5, 'Ce6gbyHonQC6byHnCe6g'),
-        112: (6.11, 0, 5, 6, 7, 'X47BT1HoTxDKT0HoT57BTxAATxAA'),
-        113: (6.11, 0, 5, 6, 7, 'C+nmbxP2nQD2fxP2HOn2AAD2AAD2'),
-        114: (3.89, 0, 5, 4, 5, 'X4tPcU8QTxBPEA=='),
-        115: (5.56, 0, 5, 6, 5, 'G+5gXzNgGu6ANQXxLO6A'),
-        116: (3.33, 0, 4, 4, 6, 'DiDf4j8gPyA/MA3i'),
-        117: (6.11, 0, 5, 6, 5, 'bwD2bwD2bwD2XzX2DPjm'),
-        118: (5.56, 0, 5, 6, 5, 'ygH1bwfgD1yACs8gBPwA'),
-        119: (7.78, 0, 5, 8, 5, '5g/AmplM8NZdl7bxH+N90AzgL4A='),
-        120: (5.56, 0, 5, 6, 5, 'fhfhC78wA/sADJ5QnQXy'),
-        121: (5.56, 0, 5, 6, 7, 'uwH1TxbgDWuAB88gAfsAAvUAf5AA'),
-        122: (5, 0, 5, 5, 5, 'b/9gCOEF8wP1AJ//oA=='),
-        123: (3.89, 0, 3, 4, 9, 'BvoLsAuQHYDdEA2AC5ALsAX6'),
-        124: (2.8, 0, 3, 3, 9, 'PwPwPwPwPwPwPwPwPwA='),
-        125: (3.89, 0, 3, 4, 9, 'zkAMkAqQCcAC6wnACpAMkM5A'),
-        126: (5.84, 0, 5, 6, 2, 'b8QUUV3k'),
-        183: (3.33, 0, 5, 3, 2, 'JwXx'),
-        223: (6.11, 0, 3, 6, 7, 'B++gL0LzTxnATx9gTxb2TyCcT17l'),
-        224: (5.56, 0, 2, 6, 8, 'CcAAAKYAAAAALO5AAQrATc7QvAzQX9Xn'),
-        225: (5.56, 0, 2, 6, 8, 'AE4gANMAAAAALO5AAQrATc7QvAzQX9Xn'),
-        226: (5.56, 0, 2, 6, 8, 'AuoACzlQAAAALO5AAQrATc7QvAzQX9Xn'),
-        228: (5.56, 0, 3, 6, 7, 'DixAAAAALO5AAQrATc7QvAzQX9Xn'),
-        229: (5.56, 0, 1, 6, 9, 'ArgABzoAArgAAAAALO5AAQrATc7QvAzQX9Xn'),
-        230: (8.89, 0, 5, 9, 5, 'LO6d6AAAf0HzPc3+7mnQn0AATuZ+6xA='),
-        231: (5.56, 0, 5, 6, 7, 'Ce5gbxXxnQAAbxTxCe5gALMAAaoA'),
-        232: (5.56, 0, 2, 6, 8, 'BeEAAGoAAAAACt1QbwTwn93SbxAACu6Q'),
-        233: (5.56, 0, 2, 6, 8, 'AC5AALUAAAAACt1QbwTwn93SbxAACu6Q'),
-        234: (5.56, 0, 2, 6, 8, 'AdwACkdwAAAACt1QbwTwn93SbxAACu6Q'),
-        235: (5.56, 0, 3, 6, 7, 'C1lwAAAACt1QbwTwn93SbxAACu6Q'),
-        236: (2.78, -1, 2, 4, 8, 'LkAD0AAABPEE8QTxBPEE8Q=='),
-        237: (2.78, 0, 2, 4, 8, 'CcA8AAAATxBPEE8QTxBPEA=='),
-        238: (2.78, -1, 2, 5, 8, 'B/QCscAAAABPEATxAE8QBPEATxA='),
-        239: (2.78, -1, 3, 4, 7, 'PR8AAATxBPEE8QTxBPE='),
-        241: (6.11, 0, 2, 6, 8, 'BtKgChugAAAAX3/BT2L2TxDnTxDnTxDn'),
-        242: (6.11, 0, 2, 6, 8, 'AuMAADwAAAAACe6gbyHonQC6byHnCe6g'),
-        243: (6.11, 0, 2, 6, 8, 'AA2AAIkAAAAACe6gbyHonQC6byHnCe6g'),
-        244: (6.11, 0, 2, 6, 8, 'AM0ACHWQAAAACe6gbyHonQC6byHnCe6g'),
-        246: (6.11, 0, 3, 6, 7, 'CIagAAAACe6gbyHonQC6byHnCe6g'),
-        248: (6.11, 0, 4, 6, 7, 'AAACCe63byb4nWe6b4HnW+6QIAAA'),
-        249: (6.11, 0, 2, 6, 8, 'BeEAAGoAAAAAbwD2bwD2bwD2XzX2DPjm'),
-        250: (6.11, 0, 2, 6, 8, 'AA2AAIkAAAAAbwD2bwD2bwD2XzX2DPjm'),
-        251: (6.11, 0, 2, 6, 8, 'AM0ACGWQAAAAbwD2bwD2bwD2XzX2DPjm'),
-        252: (6.11, 0, 3, 6, 7, 'CIagAAAAbwD2bwD2bwD2XzX2DPjm'),
-        253: (5.56, 0, 2, 6, 10, 'AC5AALUAAAAAuwH1TxbgDWuAB88gAfsAAvUAf5AA'),
-        255: (5.56, 0, 3, 6, 9, 'DEpgAAAAuwH1TxbgDWuAB88gAfsAAvUAf5AA'),
-        339: (9.44, 0, 5, 10, 5, 'Ce6Z3UBvIe4G0J0Av+7gbyHtAAAJ7onugA=='),
-        8211: (5.56, 0, 7, 6, 1, 'v//z'),
-        8212: (10, 0, 7, 10, 1, '//////8='),
-        8216: (2.78, 0, 3, 3, 3, 'HASAXxA='),
-        8217: (2.78, 0, 3, 3, 3, 'TxDAHAA='),
-        8220: (5, 0, 3, 5, 3, 'DQ0TkbBPXzA='),
-        8221: (5, 0, 3, 5, 3, 'T09AsZMcDQA='),
-        8230: (10, 1, 9, 8, 1, '6Auwjg=='),
-        8722: (5.84, 0, 6, 6, 2, 'n//3AREQ'),
-        9642: (3.55, 0, 6, 4, 2, 'f/B/8A=='),
-    },
-    ('sans_b', 9): {
-        32: (2.5, 0, 0, 0, 0, ''),
-        33: (3, 0, 2, 3, 7, 'LxHxHxDwDwAALxA='),
-        34: (4.27, 0, 2, 4, 3, 'bIpbeUtp'),
-        35: (5, 0, 2, 5, 7, 'BGRgc3NurpCgoJ29ZGRgc2QA'),
-        36: (5, 0, 1, 5, 9, 'AEAC39OpdEjaABr+QAiMAHfG39MAUAA='),
-        37: (8, 0, 2, 8, 7, 'XLALMLOkSQCzpMEAXLd7xAAcSjsAlEo7A7ALxA=='),
-        38: (6.5, 0, 2, 7, 7, 'Ac1gAGlMAATdUAHPVYB7bbUIoM8QHNueMA=='),
-        39: (2.14, 0, 2, 2, 3, 'inlp'),
-        40: (3, 0, 2, 3, 9, 'CLDzXgewiwewXgDzCLA='),
-        41: (3, 0, 2, 3, 9, 'uAPwDkC3C4C3DkPwuAA='),
-        42: (3.5, 0, 2, 4, 4, 'CjDO1T6wZbA='),
-        43: (5.25, 0, 3, 5, 5, 'ALEADiCf/+AOIAChAA=='),
-        44: (2.5, 0, 8, 2, 3, 'bgsq'),
-        45: (3, 0, 6, 3, 2, 'r6AQ'),
-        46: (2.5, 0, 8, 2, 1, 'bg=='),
-        47: (2.5, 0, 2, 3, 7, 'C1DiHwTAeQpg0wA='),
-        48: (5, 0, 2, 5, 7, 'C/oF0dWaComQmYoKhdHVCvoA'),
-        49: (5, 0, 2, 5, 7, 'CPUFblAA5QAOUADlAA5Qbv+w'),
-        50: (5, 0, 2, 5, 7, 'HPwXwdcADXAK4QniBfIAr/+g'),
-        51: (5, 0, 2, 5, 7, 'HPwYsOcAHVA/wAAMirG5LPwg'),
-        52: (5, 0, 2, 5, 7, 'AI8gHPIIbyHQ8pYPLO7+AA8g'),
-        53: (5, 0, 2, 5, 7, 'X+5WwAB+7BNQyQAIuLHIHPsQ'),
-        54: (5, 0, 2, 5, 7, 'CfwE4cWZAArO0pwLldC5Cvwg'),
-        55: (5, 0, 2, 5, 7, 'n/+QAMUAbAANUATwAIsACqAA'),
-        56: (5, 0, 2, 5, 7, 'HOwXwMhtHWHe0ZsKmqCqLOwg'),
-        57: (5, 0, 2, 5, 7, 'LPoJsNabDJLeygAKlrHkHPkA'),
-        58: (3, 0, 4, 3, 5, 'LyAAAAAALyA='),
-        59: (3, 0, 4, 3, 7, 'LyAAAAAALyChDAA='),
-        60: (5.25, 0, 3, 5, 5, 'ABezrpKsEAOukgAXsA=='),
-        61: (5.25, 0, 4, 5, 3, 'n//gAACf/9A='),
-        62: (5.25, 0, 3, 5, 5, 'iCABfcUACeF9xYggAA=='),
-        63: (5.5, 0, 2, 5, 7, 'Cv1G4Y4ABuAE5ADlAAAAAfMA'),
-        64: (8.78, 0, 2, 9, 9, 'AEqqgABJAAOQCwmaeRRlYKRzZKILGCdKEeCwR0uYpACyAAAAAZqpYAA='),
-        65: (6.5, 0, 2, 7, 7, 'AK8gAA+3AAXV0ACoDyAP//cE4AbAmgAvEA=='),
-        66: (6.5, 0, 2, 7, 7, 'b//TBuALoG4AuQb//jBuAG4G4Abwb//mAA=='),
-        67: (6.5, 0, 2, 7, 7, 'Bd/UAvUG0IwAAAmwAAB9AAAC9hbQBN/VAA=='),
-        68: (6.5, 0, 2, 7, 7, 'b/6QBuAtoG4AXwbgA/FuAF8G4C2gb/+gAA=='),
-        69: (6, 0, 2, 6, 7, 'b//3bgAAbgAAb//zbgAAbgAAb//6'),
-        70: (5.5, 0, 2, 6, 7, 'b//ybgAAbgAAb//xbgAAbgAAbgAA'),
-        71: (7, 0, 2, 7, 7, 'BN/WAvYW0XwAAAmwP/d9AAxy9hTmBN/XAA=='),
-        72: (6.5, 0, 2, 6, 7, 'bgBubgBubgBub//+bhF+bgBubgBu'),
-        73: (2.5, 0, 2, 2, 7, 'bm5ubm5ubg=='),
-        74: (5, 0, 2, 5, 7, 'Av9gAOYADmAA5gAOaqL0PfkA'),
-        75: (6.5, 0, 2, 7, 7, 'bgC7BuCsAG6NEAb/4QBvHaAG4C9QbgB/IA=='),
-        76: (5.5, 0, 2, 6, 7, 'bgAAbgAAbgAAbgAAbgAAbgAAb//z'),
-        77: (7.5, 0, 2, 7, 7, 'b3AP5usD7mzgeubKTG5sadTmwvpObA1U4A=='),
-        78: (6.5, 0, 2, 6, 7, 'b1BOb9BObNVObG1ObA2ebAb+bADe'),
-        79: (7, 0, 2, 7, 7, 'BN/EAvYX8n0ADXmwALl9AA1y9hbyBN/UAA=='),
-        80: (6, 0, 2, 6, 7, 'b/+xbgHYbgCqbgHXb/+wbgAAbgAA'),
-        81: (7, 0, 2, 7, 9, 'BN/EAvYX8n0ADXmwALl9AA2C9gbyBd/lAADZAAAE7gA='),
-        82: (6.5, 0, 2, 7, 7, 'b//VBuAH4G4Ajgb//jBuBfEG4A2AbgBvEA=='),
-        83: (6, 0, 2, 6, 7, 'Cu6gXgHUX2EACO/BAALZewDIG/+x'),
-        84: (5.5, 0, 2, 6, 7, '7//2AOYAAOYAAOYAAOYAAOYAAOYA'),
-        85: (6.5, 0, 2, 6, 7, 'fQBffQBffQBffQBfbQBuP0G6B++x'),
-        86: (6, 0, 2, 6, 7, 'yACMfQDXLxHyDGXAB6pwAu4gAN0A'),
-        87: (8.5, 0, 2, 9, 7, '1gnxDlqQzkHybA+XTgPy1begD4oupwC+cP4wCPMM8AA='),
-        88: (6, 0, 2, 6, 7, 'fQDXDXfQBO9QAO8AB92AH0TxqwC6'),
-        89: (6, 0, 2, 6, 7, 'nADJH0TxB8xwAO4AAKoAAKoAAKoA'),
-        90: (5.5, 0, 2, 6, 7, 'b//wAAugAF4QAeUAC6AAXhAAv//z'),
-        91: (3, 0, 2, 3, 9, 'j7igigigigigigigj8A='),
-        92: (2.5, 0, 2, 3, 7, '0wpgeQTAHwDiC1A='),
-        93: (3, 0, 2, 3, 9, 'v3CnCnCnCnCnCnCnz3A='),
-        94: (5.25, 0, 2, 6, 4, 'BPgAC04ALQlglgLQ'),
-        95: (5, -1, 10, 7, 1, 'CIiIAA=='),
-        96: (3, 0, 1, 3, 2, 'ewCl'),
-        97: (5, 0, 4, 6, 5, 'PNwAAA5QTb9guR9gb7jQ'),
-        98: (5.5, 0, 2, 6, 7, 'bQAAbQAAbq5wbxXwbQLxbxXwba5g'),
-        99: (5, 0, 4, 5, 5, 'CtwXwLiaAAfQqAvcEA=='),
-        100: (5.5, 0, 2, 5, 7, 'AAXgAF4c2ufQjpoF59COHdrg'),
-        101: (5, 0, 4, 5, 5, 'C8sXwJiezIfAAAvdMA=='),
-        102: (3, 0, 2, 4, 7, 'DNAvEL/QLxAvEC8QLxA='),
-        103: (5.5, 0, 4, 5, 7, 'HNrn0I6aBefQjh3a0AB8Ld0w'),
-        104: (5.5, 0, 2, 5, 7, 'bQAG0ABtr3bxfm0E9tBPbQTw'),
-        105: (2.5, 0, 2, 2, 7, 'XABtbW1tbQ=='),
-        106: (2.5, -1, 2, 3, 9, 'BcAABeBeBeBeBeBtH4A='),
-        107: (5, 0, 2, 5, 7, 'bQAG0ABtDHbakG/oBtPybQmw'),
-        108: (2.5, 0, 2, 2, 7, 'bW1tbW1tbQ=='),
-        109: (8, 0, 4, 8, 5, 'bb5t0W8b0OZtCaDHbQmgx20JoMc='),
-        110: (5.5, 0, 4, 5, 5, 'ba928X5tBPbQT20E8A=='),
-        111: (5.5, 0, 4, 6, 5, 'Ct1QfQXwmgLxfQXgCt1A'),
-        112: (5.5, 0, 4, 6, 7, 'ba5wbxXwbQLxbxXwbq5gbQAAbQAA'),
-        113: (5.5, 0, 4, 5, 7, 'HNrn0I6aBefQjh3a4ABeAAXg'),
-        114: (3.5, 0, 4, 4, 5, 'bMVvMG0AbQBtAA=='),
-        115: (5, 0, 4, 5, 5, 'LN030QAb/TAAqU3MMA=='),
-        116: (3, 0, 3, 3, 6, 'Hgz6TwTwTwHr'),
-        117: (5.5, 0, 4, 5, 5, 'fAXnwF58Bebgnh3Z4A=='),
-        118: (5, 0, 4, 5, 5, 'xwfHwMcfLxDLsAf2AA=='),
-        119: (7, 0, 4, 7, 5, '409D6ni4emrEymLdDeIOoK4A'),
-        120: (5, 0, 4, 5, 5, 'jAxwy8AG9QDp0JoLkA=='),
-        121: (5, 0, 4, 5, 7, 'uAfF0MYPPxCcsAP1AE4AflAA'),
-        122: (4.5, 0, 4, 5, 5, 'bv8ADIAIwAPyAK/uIA=='),
-        123: (3.5, 0, 2, 4, 9, 'CPQNUA1AHzDLAA4wDUANUAf0'),
-        124: (2.52, 0, 2, 2, 9, 'XV1dXV1dXV1d'),
-        125: (3.5, 0, 2, 4, 9, 'vhANUAxQC5AE9QtwDFANUL0Q'),
-        126: (5.25, 0, 5, 5, 2, 'fpBEBus='),
-        183: (3, 0, 4, 2, 2, 'JG4='),
-        223: (5.5, 0, 2, 6, 7, 'Ce5APwiwXR1QbV4QbQvQbQDzbY2w'),
-        224: (5, 0, 1, 6, 8, 'C3AAAMIAAAAAPNsAAA5QXb9guR9gbqjQ'),
-        225: (5, 0, 1, 6, 8, 'AIoAAsAAAAAAPNsAAA5QXb9guR9gbqjQ'),
-        226: (5, 0, 1, 6, 8, 'BOQACxsAAAAAPNsAAA5QXb9guR9gbqjQ'),
-        228: (5, 0, 2, 6, 7, 'Dx4AAAAAPNsAAA5QXb9guR9gbqjQ'),
-        229: (5, 0, 0, 6, 9, 'BaMACQgABaMAAAAAPNsAAA5QXb9guR9gbqjQ'),
-        230: (8, 0, 4, 8, 5, 'PdzMsAAMsKZNru3Xqg6wAF/FzcM='),
-        231: (5, 0, 4, 5, 7, 'CtwXwLiaAAfQqAvcEAwQArUA'),
-        232: (5, 0, 1, 5, 8, 'CLAACkAAAAC8sXwJiezIfAAAvdM='),
-        233: (5, 0, 1, 5, 8, 'AF0ADBAAAAC8sXwJiezIfAAAvdM='),
-        234: (5, 0, 1, 5, 8, 'A+YAsbEAAAC8sXwJiezIfAAAvdM='),
-        235: (5, 0, 2, 5, 7, 'DR8AAAALyxfAmJ7Mh8AAC90w'),
-        236: (2.5, -1, 1, 3, 8, 'HiBLAABeBeBeBeBe'),
-        237: (2.5, 0, 1, 3, 8, 'C4SgAAXgXgXgXgXg'),
-        238: (2.5, -1, 1, 4, 8, 'COEqKgAABeAF4AXgBeAF4A=='),
-        239: (2.5, -1, 2, 4, 7, 'LEsAAAXgBeAF4AXgBeA='),
-        241: (5.5, 0, 1, 5, 8, 'CKJwksMAAAba928X5tBPbQT20E8='),
-        242: (5.5, 0, 1, 6, 8, 'BdAAAHcAAAAACt1QfQXwmgLxfQXgCt1A'),
-        243: (5.5, 0, 1, 6, 8, 'AC4QALMAAAAACt1QfQXwmgLxfQXgCt1A'),
-        244: (5.5, 0, 1, 6, 8, 'AdgACjogAAAACt1QfQXwmgLxfQXgCt1A'),
-        246: (5.5, 0, 2, 6, 7, 'CkwwAAAACt1QfQXwmgLxfQXgCt1A'),
-        248: (5.5, 0, 3, 6, 7, 'AAAACt2xfQzwmpXxf1XgbN1AEAAA'),
-        249: (5.5, 0, 1, 5, 8, 'CKAACkAAAAfAXnwF58Bebgnh3Z4='),
-        250: (5.5, 0, 1, 5, 8, 'AC4QCzAAAAfAXnwF58Bebgnh3Z4='),
-        251: (5.5, 0, 1, 5, 8, 'AdgAoqIAAAfAXnwF58Bebgnh3Z4='),
-        252: (5.5, 0, 2, 5, 7, 'C0wgAAB8BefAXnwF5uCeHdng'),
-        253: (5, 0, 1, 5, 10, 'AGwAHBAAAAuAfF0MYPPxCcsAP1AE4AflAA=='),
-        255: (5, 0, 2, 5, 9, 'DR8AAAC4B8XQxg8/EJywA/UATgB+UAA='),
-        339: (8.5, 0, 4, 9, 5, 'Ct2N1gfQX0HwmgL93SfQX0AACt192QA='),
-        8211: (5, 0, 6, 5, 1, 'ru6g'),
-        8212: (9, 0, 6, 9, 1, '7u7u7uA='),
-        8216: (2.5, 0, 2, 2, 3, 'KlZu'),
-        8217: (2.5, 0, 2, 2, 3, 'bgsp'),
-        8220: (4.5, 0, 2, 4, 3, 'GylGZV59'),
-        8221: (4.5, 0, 2, 4, 3, 'X20LCyo4'),
-        8230: (9, 0, 8, 8, 1, 'D0LyTw=='),
-        8722: (5.25, 0, 5, 5, 1, 'n//g'),
-        9642: (3.19, 0, 5, 3, 2, 'j7j7'),
-    },
-    ('sans', 12): {
-        32: (3.33, 0, 0, 0, 0, ''),
-        33: (3.33, 1, 2, 2, 9, '4+PT0tLCwQDj'),
-        34: (4.27, 0, 2, 4, 3, 'eUtoSmc6'),
-        35: (6.67, 0, 2, 7, 9, 'AJAKAAoCgK///5BGByAGMKAAgQoA////UKAoACgGQAA='),
-        36: (6.67, 0, 1, 7, 11, 'AAsAAI39YFsLHheQsAAufAAAKf5gAAs+QgCwl6kLHTCu/WAACwAA'),
-        37: (10.67, 0, 2, 11, 9, 'G6cACzAHYMAFkACFCxDBAAZg0IYAABu3LAupAAALNYCxAAWQdgowAMEFgMEAhgALqAA='),
-        38: (8, 0, 2, 8, 9, 'AGzGAADgDgAA4EwAALqxAAfdALBLC2LAhwHrUGsAnyAJzJXa'),
-        39: (2.3, 0, 2, 2, 3, 'WllJ'),
-        40: (4, 0, 2, 4, 11, 'AHgD0AtQDxAuAD0ALgAPEAtQA9AAeA=='),
-        41: (4, 0, 2, 4, 11, 'hwANMAawAfAA4gDTAOIB8AawDTCHAA=='),
-        42: (4.67, 0, 2, 5, 4, 'ALAIjaQI0gGikA=='),
-        43: (7.02, 0, 3, 7, 7, 'AAUAAADQAAANAAXd/dUADQAAANAAAAMAAA=='),
-        44: (3.33, 1, 10, 2, 3, '5HOg'),
-        45: (4, 0, 7, 4, 1, 'f/c='),
-        46: (3.33, 1, 10, 2, 1, '4w=='),
-        47: (3.33, 0, 2, 4, 9, 'ALMA4ASgCGAMIB0AWQCVANEA'),
-        48: (6.67, 0, 2, 7, 9, 'BN6xAeMHoFsADweQAOKIAA03kADiWwAfAOMIoATesQA='),
-        49: (6.67, 0, 2, 7, 9, 'Aq8QAKTxAAAPEAAA8QAADxAAAPEAAA8QAADxAB7v7hA='),
-        50: (6.67, 0, 2, 7, 9, 'Bd7CAuIHsAIAPgAAB6AABOEABdIABNIAAOIAAF/u7hA='),
-        51: (6.67, 0, 2, 7, 9, 'Bt7CA+EHsBIAPgAAGoAAj8EAAAbQIwAPFNEF4AfewwA='),
-        52: (6.67, 0, 2, 7, 9, 'AATyAADOIACH0gAsDSAMMNIGkA0gnd39QAANIAAA0gA='),
-        53: (6.67, 0, 2, 7, 9, 'D+7pAeAAAC0AAAPs3CAWEG0AAADxAAAPFdEHwAjdsgA='),
-        54: (6.67, 0, 2, 7, 9, 'Ac7TAMUFkC0AAAW63DBvIF0FwADxLgAPANUGwALNwgA='),
-        55: (6.67, 0, 2, 7, 9, 'Xu7vEAAEsAAA0gAAaQAADSAAA9AAAIgAAAtQAADUAAA='),
-        56: (6.67, 0, 2, 7, 9, 'BcyyAeEGwD0ALgDUCJAF7dID0QPgegAPFNAD4AfcwwA='),
-        57: (6.67, 0, 2, 7, 9, 'Bd6wAuIJkFsALgWwAfEvII8QbdfwAAAtAcEKcAfekAA='),
-        58: (3.33, 1, 4, 2, 7, '4wAAAAAA4w=='),
-        59: (3.33, 1, 4, 2, 9, '5AAAAAAA5HOg'),
-        60: (7.02, 0, 4, 7, 5, 'AAFbYWvIMG5AAAFryCAAAWtQ'),
-        61: (7.02, 0, 5, 7, 4, 'Xu7uUAAAAAAAAAXu7uU='),
-        62: (7.02, 0, 4, 7, 5, 'W2EAADjLYQAATmAoy2FbYQAA'),
-        63: (6.67, 0, 2, 7, 9, 'Bd7DA+IF4CQADjAAAfEAAccAANcAAEwAAAAAAAB7AAA='),
-        64: (12.19, 0, 2, 12, 11, 'AAGLu6IAADwwACwwAcFcxsLACFPACbDADApQB4CxDQwgC1DADAtAXjSQDQPcd8oQCVAAAAAAAcUAAGMAABjMy1AA'),
-        65: (8, 0, 2, 8, 9, 'AAzQAAAswwAAh2kAAOEOAASgClAK7u6wHgAA4WoAAJbFAABM'),
-        66: (8, 0, 2, 8, 9, 'D+7rIA8QCLAPEATQDxAagA/u7SAPEAPhDxAAxQ8QA/IP7u1Q'),
-        67: (8.67, 0, 2, 9, 9, 'AH3+ogCNMAfAHzAAAATQAAAAXAAAAATgAAAAHzAAAACNMAXAAG3uogA='),
-        68: (8.67, 0, 2, 9, 9, 'D+7rMADxAG4wDxAAfADxAALwDxAADxDxAALwDxAAewDxAF4gD+7rMAA='),
-        69: (8, 0, 2, 8, 9, 'D+7u4w8QAAAPEAAADxAAAA/u7sAPEAAADxAAAA8QAAAP7u7n'),
-        70: (7.33, 0, 2, 7, 9, 'D+7uwPEAAA8QAADxAAAP7u6g8QAADxAAAPEAAA8QAAA='),
-        71: (9.33, 0, 2, 9, 9, 'AH3+swCNMAbQHyAAAATQAAAAXAAP/3TQAACXDzAACXB9MAXjAGzuowA='),
-        72: (8.67, 0, 2, 8, 9, 'DxAAew8QAHsPEAB7DxAAew////sPEAB7DxAAew8QAHsPEAB7'),
-        73: (3.33, 1, 2, 2, 9, '4+Pj4+Pj4+Pj'),
-        74: (6, 0, 2, 6, 9, 'AI7xAADxAADxAADxAADxAADxAADxmQXQLO0w'),
-        75: (8, 0, 2, 8, 9, 'DxAF0Q8QTiAPEuMADz5AAA/eUAAPQ+IADxBtAA8QCrAPEADX'),
-        76: (6.67, 0, 2, 7, 9, 'DxAAAPEAAA8QAADxAAAPEAAA8QAADxAAAPEAAA/u7kA='),
-        77: (10, 0, 2, 10, 9, 'D6AACfAP0AAN8A+VAErwD0oAlPAPDgDQ8A8JVJDwDwO6QPAPAN0A8A8AiQDw'),
-        78: (8.67, 0, 2, 8, 9, 'D5AAWw/SAFsPWwBbDwxAWw8D0FsPAKZbDwAeWw8ACNsPAADr'),
-        79: (9.33, 0, 2, 9, 9, 'AH3+kQCdIBnQHyAADWXQAACKawAABrXQAACKHyAADGCNIBnAAG3ukQA='),
-        80: (8, 0, 2, 8, 9, 'D+7tQA8QBPEPEADEDxAA1A8QBeAP7tsgDxAAAA8QAAAPEAAA'),
-        81: (9.33, 0, 2, 9, 11, 'AH3+kQCdIBnQHyAADWXQAACKawAABrXQAACKHyAADFCNIAnAAH3ukAAAB8AAAAAK6QA='),
-        82: (8.67, 0, 2, 9, 9, 'D+7uoADxAAuQDxAAawDxACxwD+7vcADxAeIADxAHsADxAA5ADxAAbQA='),
-        83: (8, 0, 2, 8, 9, 'A73cQA4wA/EPQAAAB/phAAAWrpAAAADUEwAAtj4wBPIEzuxA'),
-        84: (7.33, 0, 2, 8, 9, 'ru/+4AAOMAAADjAAAA4wAAAOMAAADjAAAA4wAAAOMAAADjAA'),
-        85: (8.67, 0, 2, 8, 9, 'HwAAax8AAGsfAABrHwAAax8AAGsfAABrDyAAiQmxA+MAnuxA'),
-        86: (8, 0, 2, 8, 9, 'xgAAbGwAAMYPIAHwCnAHoATQDUAA4y4AAIiIAAAt0gAADMAA'),
-        87: (11.33, 0, 2, 12, 9, '1QAPUADyiQA+kATgTQB30AiQDxDC0QxQC1DglQ8QB6SgWUwAA9dwHYgAAOwwDcQAAK8ACfAA'),
-        88: (8, 0, 2, 8, 9, 'LhAB4wewCoAAxk0AAC7jAAAM0AAAa7cAAeIeIAtwBsBsAADG'),
-        89: (8, 0, 2, 8, 9, 'bAAAxgtwB7AB4i4QAGy2AAAMsAAACYAAAAmAAAAJgAAACYAA'),
-        90: (7.33, 0, 2, 7, 9, 'Lu7voAAB4wAAuAAAbAAALiAADHAAB7AAA+EAAJ/u7uA='),
-        91: (3.33, 0, 2, 4, 11, 'L8IuAC4ALgAuAC4ALgAuAC4ALgAvwg=='),
-        92: (3.33, 0, 2, 4, 9, '0QCVAFkAHQANEAhgBKAA4ADD'),
-        93: (3.33, 0, 2, 3, 11, 'rnCHCHCHCHCHCHCHCHCHrnA='),
-        94: (5.62, 0, 2, 6, 4, 'AdoACUswLAPApACk'),
-        95: (6.67, -1, 13, 8, 1, 'LMzMyQ=='),
-        96: (4, 0, 1, 4, 2, 'LTABoA=='),
-        97: (6.67, 0, 4, 7, 7, 'BtyxAeEIkAAAWwCMvbBcAFsGsBvAHNs+cA=='),
-        98: (6.67, 0, 2, 7, 9, 'PQAAA9AAAD2N1AP1BdA/AA8T4ADyPwAPE/QF0D2M0wA='),
-        99: (6, 0, 4, 6, 7, 'Bd2gHhCnWwAAegAAWwAAHhCYBd2w'),
-        100: (6.67, 0, 2, 6, 9, 'AAA9AAA9B9x9LhCdagBNegA9agBNLhCtCNx+'),
-        101: (6.67, 0, 4, 7, 7, 'BMyxAeIGsFsADwft3dFbAAAB4gSwBMzDAA=='),
-        102: (3.33, 0, 2, 4, 9, 'CeQOIK/EDxAPEA8QDxAPEA8Q'),
-        103: (6.67, 0, 4, 6, 9, 'B9tuLhCtagBdeQA9agBdPgCtCNttBAB5Cdyx'),
-        104: (6.67, 0, 2, 6, 9, 'LgAALgAALnzUL1BcLwAuLgAuLgAuLgAuLgAu'),
-        105: (2.67, 0, 2, 2, 9, 'PQA9PT09PT09'),
-        106: (2.67, -1, 2, 3, 11, 'A9AAA9A9A9A9A9A9A9BNPnA='),
-        107: (6, 0, 2, 6, 9, 'PQAAPQAAPQDHPQmQPWsAP/oAPh1QPQPhPQCK'),
-        108: (2.67, 0, 2, 2, 9, 'PT09PT09PT09'),
-        109: (10, 0, 4, 10, 7, 'LI3TvZAvQK0A8S4AiQDTLgCIANMuAIgA0y4AiADTLgCIANM='),
-        110: (6.67, 0, 4, 6, 7, 'LH3kL1BsLwAuLgAuLgAuLgAuLgAu'),
-        111: (6.67, 0, 4, 7, 7, 'BcyyAeEGwGsADwegAPJrAA8B4QbABcyyAA=='),
-        112: (6.67, 0, 4, 7, 9, 'PYzUA/UF0D8ADxPQAPI/AA8T9AXQPYzTA9AAAD0AAAA='),
-        113: (6.67, 0, 4, 6, 9, 'B9x+LhCdagBNegA9agBNLhCtCNx9AAA9AAA9'),
-        114: (4, 0, 4, 4, 7, 'PawvYC8ALgAuAC4ALgA='),
-        115: (6, 0, 4, 6, 7, 'Cs2gWwBzPkAABb+QAAG3ZgCXG8yg'),
-        116: (3.33, 0, 2, 4, 9, 'DAAOAK/BHwAfAB8AHwAPAAvT'),
-        117: (6.67, 0, 4, 6, 7, 'PQA9PQA9PQA9PQA9PQBNHxCtCOxt'),
-        118: (6, 0, 4, 6, 7, 'xQBceQCnLgDhDDPAB4hgAs0QANwA'),
-        119: (8.67, 0, 4, 9, 7, '4gXwB5pQnDCkaQxXDgLAwbLADVgNWACcUKtABfEH8AA='),
-        120: (6, 0, 4, 6, 7, 'ewC2DETAA90gAMwABMxADSPQiQCY'),
-        121: (6, 0, 4, 6, 9, 'xQBMagCXHwDhC1PABahgAO0QAJsAAMQAfXAA'),
-        122: (6, 0, 4, 6, 7, 'Td30AAbAAC4wALgABtAAHjAAj93V'),
-        123: (4.02, 0, 2, 4, 11, 'AtkIgAhwCGAcQKsAC1AIcAhwCIAC2Q=='),
-        124: (3.12, 1, 2, 2, 12, '4ODg4ODg4ODg4ODg'),
-        125: (4.02, 0, 2, 4, 11, 'nSAIcAeAB4AEwQDKBqAHgAeACHCdIA=='),
-        126: (7.02, 0, 5, 7, 2, 'PNcARBBtww=='),
-        183: (4, 1, 7, 2, 2, 'mSI='),
-        223: (7.33, 0, 2, 7, 9, 'A83VAOQC4C4ATALgHSAuA9AC4AnSLgAHsuAQTC4M3UA='),
-        224: (6.67, 0, 1, 7, 10, 'AdQAAAGgAAAAAABtyxAeEIkAAAWwCMvbBcAFsGsBvAHNs+c='),
-        225: (6.67, 0, 1, 7, 10, 'AAqAAAWAAAAAAABtyxAeEIkAAAWwCMvbBcAFsGsBvAHNs+c='),
-        226: (6.67, 0, 1, 7, 10, 'AL8wAHcrAAAAAABtyxAeEIkAAAWwCMvbBcAFsGsBvAHNs+c='),
-        228: (6.67, 0, 1, 7, 10, 'AAAQAFkOAAAAAABtyxAeEIkAAAWwCMvbBcAFsGsBvAHNs+c='),
-        229: (6.67, 0, 0, 7, 11, 'AJpAABgKAACaQAAAAAAG3LEB4QiQAABbAIy9sFwAWwawG8Ac2z5w'),
-        230: (10.67, 0, 4, 11, 7, 'B9y1zLEC4AnyBrAAAGwADwCcvf3d0XsAawAACJAa4gSwLcsk3MMA'),
-        231: (6, 0, 4, 6, 10, 'Bd2gHhCnWwAAegAAWwAAHhCYBd2wAE4gAAhQAGsQ'),
-        232: (6.67, 0, 1, 7, 10, 'ALcAAACiAAAAAABMyxAeIGsFsADwft3dFbAAAB4gSwBMzDA='),
-        233: (6.67, 0, 1, 7, 10, 'AAewAAKQAAAAAABMyxAeIGsFsADwft3dFbAAAB4gSwBMzDA='),
-        234: (6.67, 0, 1, 7, 10, 'AI9QAEkbEAAAAABMyxAeIGsFsADwft3dFbAAAB4gSwBMzDA='),
-        235: (6.67, 0, 1, 7, 10, 'AAAQAEsPAAAAAABMyxAeIGsFsADwft3dFbAAAB4gSwBMzDA='),
-        236: (3.33, 0, 1, 3, 10, 'mQCEAADTDTDTDTDTDTDT'),
-        237: (3.33, 0, 1, 4, 10, 'BNELEAAADTANMA0wDTANMA0wDTA='),
-        238: (3.33, -1, 1, 5, 10, 'BPoBsYUAAAANMADTAA0wANMADTAA0wANMA=='),
-        239: (3.33, 0, 1, 4, 10, 'EADwpQAADTANMA0wDTANMA0wDTA='),
-        241: (6.67, 0, 1, 6, 10, 'BNYmCQjSAAAALXzkL1BcLwAuLgAuLgAuLgAuLgAu'),
-        242: (6.67, 0, 1, 7, 10, 'ALcAAACSAAAAAABcyyAeEGwGsADwegAPJrAA8B4QbABcyyA='),
-        243: (6.67, 0, 1, 7, 10, 'AAigAAOQAAAAAABcyyAeEGwGsADwegAPJrAA8B4QbABcyyA='),
-        244: (6.67, 0, 1, 7, 10, 'AJ9QAFkbEAAAAABcyyAeEGwGsADwegAPJrAA8B4QbABcyyA='),
-        246: (6.67, 0, 1, 7, 10, 'AAAQAEsPAAAAAABcyyAeEGwGsADwegAPJrAA8B4QbABcyyA='),
-        248: (7.33, 0, 3, 7, 9, 'AAAAECvNqQxgXyDwHMYvDDlw+lC2DKAeFLzMUBAAAAA='),
-        249: (6.67, 0, 1, 6, 10, 'AKgAAAkwAAAAPgA+PgA+PgA+PgA+LgA+HxCeCOxu'),
-        250: (6.67, 0, 1, 6, 10, 'AAqQAEgAAAAAPgA+PgA+PgA+PgA+LgA+HxCeCOxu'),
-        251: (6.67, 0, 1, 6, 10, 'AJ9QBZGxAAAAPgA+PgA+PgA+PgA+LgA+HxCeCOxu'),
-        252: (6.67, 0, 1, 6, 10, 'AAAQBaDgAAAAPgA+PgA+PgA+PgA+LgA+HxCeCOxu'),
-        253: (6, 0, 1, 6, 12, 'AB1AAJMAAAAAxQBMagCXHwDhC1PABahgAO0QAJsAAMQAfXAA'),
-        255: (6, 0, 1, 6, 12, 'AAAAClWgAAAAxQBMagCXHwDhC1PABahgAO0QAJsAAMQAfXAA'),
-        339: (11.33, 0, 4, 11, 7, 'BMzDncgB4gT7ALVrAA5QBqegAN3d2WsAD1AAAeIF+wCWBMzDndoA'),
-        8211: (6.67, 0, 7, 7, 1, 'zMzMgA=='),
-        8212: (12, 0, 7, 12, 1, 'zMzMzMzM'),
-        8216: (2.67, 0, 2, 2, 3, 'CjY+'),
-        8217: (2.67, 0, 2, 2, 3, 'Pgoa'),
-        8220: (4, 0, 2, 4, 3, 'RlWCgYmY'),
-        8221: (4, 0, 2, 4, 3, 'iZgZKFVk'),
-        8230: (12, 1, 10, 10, 1, 'bACZAMY='),
-        8722: (7.02, 0, 6, 7, 1, 'Xd3dUA=='),
-        9642: (4.25, 0, 6, 4, 3, 'X/lf+V/5'),
-    },
-    ('sans', 11): {
-        32: (3.06, 0, 0, 0, 0, ''),
-        33: (3.06, 1, 2, 2, 8, '8PDw4ODQAPA='),
-        34: (3.91, 0, 2, 4, 3, 'hoZ2dXV1'),
-        35: (6.12, 0, 2, 7, 8, 'AJBEABgIAK///xByCQAJAXAP///ACQcgA2CQAA=='),
-        36: (6.12, 0, 1, 6, 10, 'ADcACt7CaDdYeTcAC9swAEvXADcetTc8G96yADcA'),
-        37: (9.78, 0, 2, 10, 8, 'G6MAVwB0GgGwAJMMCTAAdBo5aqAbs7HAhAAHYMBlABsAwIQAogBqoA=='),
-        38: (7.34, 0, 2, 8, 8, 'AJqxAAKgZgABssIAAusgACxrBlCFCWwQdwDpAAu7e8I='),
-        39: (2.09, 0, 2, 2, 3, 'aGdX'),
-        40: (3.66, 0, 2, 4, 10, 'ALMGgA4QLQBLAEsALAANEAaAALM='),
-        41: (3.66, 0, 2, 3, 10, 'hgDRBoAtAPAPAtBoDRhg'),
-        42: (4.28, 0, 2, 5, 4, 'A3AIm7AJwAGFUA=='),
-        43: (6.42, 0, 3, 6, 7, 'AAIAADkAADkAXN7KADkAADkAAAAA'),
-        44: (3.06, 1, 9, 2, 3, '8YCg'),
-        45: (3.66, 0, 6, 4, 1, 'fdI='),
-        46: (3.06, 1, 9, 2, 1, '8A=='),
-        47: (3.06, 0, 2, 4, 8, 'ANADoAdgDBAMAEgAlADQAA=='),
-        48: (6.12, 0, 2, 6, 8, 'Bs2ALQDDaABohwBahwBaaAB4HQDDBt1w'),
-        49: (6.12, 0, 2, 6, 8, 'A8sAClsAADsAADsAADsAADsAADsALd/X'),
-        50: (6.12, 0, 2, 6, 8, 'B92QTADFAAClAALRAD0wA9IAHRAAb93X'),
-        51: (6.12, 0, 2, 6, 8, 'CN2gSwC1AAHDAK6AAAC2AABpagCmCd2g'),
-        52: (6.12, 0, 2, 6, 8, 'AAqwAFywAcOwCjOwaAOwnMz5AAOwAAOw'),
-        53: (6.12, 0, 2, 6, 8, 'L93SLAAAOwAATc2gFACnAABpWQCmCt2Q'),
-        54: (6.12, 0, 2, 6, 8, 'A92gDSCCOgAAWrygbACXSgBpDRCmBMyg'),
-        55: (6.12, 0, 2, 6, 8, 'Xd3oAACyAAWQAA0QAFoAAKUAAOIAAPAA'),
-        56: (6.12, 0, 2, 6, 8, 'CbugSwCmLRHDCNygSwCWeABpSwCWCMuQ'),
-        57: (6.12, 0, 2, 6, 8, 'CMxgTADCeAB3TAC4CduoAACGKQHRCd1Q'),
-        58: (3.06, 1, 4, 2, 6, '8AAAAADw'),
-        59: (3.06, 1, 4, 2, 8, '8QAAAADxgKA='),
-        60: (6.42, 0, 4, 6, 5, 'AAJ7BrpQfCAAFstQAAJ7'),
-        61: (6.42, 0, 5, 6, 3, 'XMzLAAAAXMzL'),
-        62: (6.42, 0, 4, 6, 5, 'WkAAAoyCAACOAoyTakAA'),
-        63: (6.12, 0, 2, 6, 8, 'CN2gXACYEQBaAADEABxQAIcAAAAAAKYA'),
-        64: (11.17, 0, 2, 11, 10, 'AASqq1AACIAACHAEgaqZKwCwtQLwggsOADsKIaDgCoCwCwjKTLMAsQAAAAADsQACMAADq6qBAA=='),
-        65: (7.34, 0, 2, 8, 8, 'AB9wAAB50AAA0sMAA8BpAApwHgAPzM5QagAFsMQAAOI='),
-        66: (7.34, 0, 2, 7, 8, 'H93ZAeAA0x4ALRH8zoAeAAlx4ABbHgAJgf3doA=='),
-        67: (7.94, 0, 2, 8, 8, 'AZ7dUAuQAsM9AAAAWgAAAGoAAAA+AAAAC5ABswCe3GA='),
-        68: (7.94, 0, 2, 8, 8, 'H93YAB4ACbAeAADjHgAAph4AAKUeAADiHgAJsB/d2QA='),
-        69: (7.34, 0, 2, 7, 8, 'H93dgeAAAB4AAAH93dQeAAAB4AAAHgAAAf3d2w=='),
-        70: (6.72, 0, 2, 7, 8, 'H93dMeAAAB4AAAHgAAAf3d0h4AAAHgAAAeAAAA=='),
-        71: (8.56, 0, 2, 8, 8, 'AZ7dcAuAAcQ9AAAAagAAAGoAbes+AAA7C5AAigCd3YA='),
-        72: (7.94, 0, 2, 8, 8, 'HgAA8B4AAPAeAADwH93d8B4AAPAeAADwHgAA8B4AAPA='),
-        73: (3.06, 1, 2, 2, 8, '8PDw8PDw8PA='),
-        74: (5.5, 0, 2, 5, 8, 'AK6wAFsABbAAWwAFsABapgmCzbE='),
-        75: (7.34, 0, 2, 8, 8, 'HgAMUB4AxgAeCnAAHpwAAB98YAAeAeMAHgBOEB4AB8A='),
-        76: (6.12, 0, 2, 6, 8, 'HgAAHgAAHgAAHgAAHgAAHgAAHgAAH93a'),
-        77: (9.16, 0, 2, 9, 8, 'H2AAP0HcAAnUHLIA2kHWgEmkHR0KOkHQpMCkHQTHCkHQDiCk'),
-        78: (7.94, 0, 2, 8, 8, 'H2AA4B3RAOAcaQDgHQwg4B0DsOAdAKXQHQAd4B0AB/A='),
-        79: (8.56, 0, 2, 9, 8, 'AZ7cUADIAC1QPQAATAagAAHwagAAHwPQAATADIAC1AAZ3cUA'),
-        80: (7.34, 0, 2, 7, 8, 'H93aEeAAmB4ABbHgAbcf3ccB4AAAHgAAAeAAAA=='),
-        81: (8.56, 0, 2, 9, 10, 'AZ7cUADIAC1QPQAATAagAAHwegAAHwTQAATADIAC1AAZ3cQAAADUAAAAA9sA'),
-        82: (7.94, 0, 2, 8, 8, 'H93cQB4AA+AeAADhHgAG0B/d6xAeAEwAHgAKcB4AAeI='),
-        83: (7.34, 0, 2, 7, 8, 'BMzaAOEAlh8QAAButxAABJ5QAABMTRAHoH3MoQ=='),
-        84: (6.72, 0, 2, 7, 8, 'rd/dYALgAAAuAAAC4AAALgAAAuAAAC4AAALgAA=='),
-        85: (7.94, 0, 2, 8, 8, 'LgAA4S4AAOEuAADhLgAA4S4AAOEfAADwDGAIsAG92hA='),
-        86: (7.34, 0, 2, 8, 8, 'xAAA4WoABbAOEAtQCWAeAAPAeAAA0sIAAHnAAAAfYAA='),
-        87: (10.38, 0, 2, 11, 8, '1ABtAA04gAvRAeBMANhQagDxOkkKUAtXYNDhAGmyDEwAAs0Ae4AADaAD8wA='),
-        88: (7.34, 0, 2, 8, 8, 'PQAJgAeQPQAAxNMAAC+AAABdwAAB0aYAC1AeIGsABcA='),
-        89: (7.34, 0, 2, 8, 8, 'egAFwA1ADSAD0IgAAJnQAAAOUAAADSAAAA0gAAANIAA='),
-        90: (6.72, 0, 2, 7, 8, 'Pd3fEAAIkAAE0AAB0gAApgAAawAALRAACu3d1Q=='),
-        91: (3.06, 0, 2, 3, 10, 'PqOwOwOwOwOwOwOwOwPq'),
-        92: (3.06, 0, 2, 4, 8, '0ACUAFgADAAMEAhQA6AA0A=='),
-        93: (3.06, 0, 2, 3, 10, 'nkCkCkCkCkCkCkCkCknk'),
-        94: (5.16, 0, 2, 6, 4, 'A+UACywAOgdQsgHA'),
-        95: (6.12, -1, 11, 8, 1, 'G7u7sg=='),
-        96: (3.66, 0, 1, 3, 2, 'LRA4'),
-        97: (6.12, 0, 4, 7, 6, 'G7yAAAAMIAq65AagDEB5A/QBy5fB'),
-        98: (6.12, 0, 2, 6, 8, 'SwAASwAATKywTxCnTABpSwBpTgCWS6uw'),
-        99: (5.5, 0, 4, 6, 6, 'CMxQPAHgeAAAeAAAPADRCMxg'),
-        100: (6.12, 0, 2, 6, 8, 'AACWAACWCsq2SwDWeACmeACmWwDmCsqm'),
-        101: (6.12, 0, 4, 6, 6, 'B7ugOgCGfbu2eAAAPQCkB8yQ'),
-        102: (3.06, 0, 2, 4, 8, 'C8APAJ+wDwAPAA8ADwAPAA=='),
-        103: (6.12, 0, 4, 6, 8, 'CsqWSwDmeACmeACmWwHmCsqlAwDDCsyA'),
-        104: (6.12, 0, 2, 6, 8, 'OwAAOwAAO6zAPhClPACWOwCWOwCWOwCW'),
-        105: (2.44, 0, 2, 2, 8, 'OgBLS0tLS0s='),
-        106: (2.44, -1, 2, 3, 10, 'A6AABLBLBLBLBLBLBKPm'),
-        107: (5.5, 0, 2, 6, 8, 'SwAASwAASwPBSywQTNMATpsASwtgSwHS'),
-        108: (2.44, 0, 2, 2, 8, 'S0tLS0tLS0s='),
-        109: (9.16, 0, 4, 9, 6, 'O52XzBPgD1CVOwDhCGOwDhCHOwDhCHOwDhCH'),
-        110: (6.12, 0, 4, 6, 6, 'O5zAPhClPACWOwCWOwCWOwCW'),
-        111: (6.12, 0, 4, 6, 6, 'CMuQTACmeABpeABpPAClCMuQ'),
-        112: (6.12, 0, 4, 6, 8, 'S7ywTxCnSwBpSwBpTgCWS5uwSwAASwAA'),
-        113: (6.12, 0, 4, 6, 8, 'CsqmSwDWeACmeACmWwDmCsu2AACWAACW'),
-        114: (3.66, 0, 4, 4, 6, 'S8Y/EDwAOwA7ADsA'),
-        115: (5.5, 0, 4, 6, 6, 'G7xgaQBgLaUAAEnAUwDgLLxw'),
-        116: (3.06, 0, 3, 3, 7, 'DAr5LQLQLQLQDbA='),
-        117: (6.12, 0, 4, 6, 6, 'SwCVSwCVSwCVSwClPADVC8ql'),
-        118: (5.5, 0, 4, 6, 6, 'wwC0eAHgHQaACzswBp0AAPcA'),
-        119: (7.94, 0, 4, 8, 6, '0QqQHZQLwFhYKaGUHGVlwAyxKrAI0A5w'),
-        120: (5.5, 0, 4, 6, 6, 'eQLQDDswAukAA9oADCpQhwHR'),
-        121: (5.5, 0, 4, 6, 8, 'wwC0aQHgDgWACVsgA7wAANYAAdEAfEAA'),
-        122: (5.5, 0, 4, 5, 6, 'TM3QAMQAiQBMAB0gCOzL'),
-        123: (3.67, 0, 2, 4, 10, 'BdUKQAowHSCqAAwgCjAKMAlABNU='),
-        124: (2.86, 0, 2, 2, 10, 'Dg4ODg4ODg4ODg=='),
-        125: (3.67, 0, 2, 4, 10, 'nRAKQAlQB4AB1QhgCVAJUApAnAA='),
-        126: (6.42, 0, 5, 6, 2, 'PMQEQAm5'),
-        183: (3.66, 1, 6, 2, 2, 'tSE='),
-        223: (6.72, 0, 2, 7, 8, 'BsyxAeAIcDsBwwOwhgA7BNIDsATgOwALM7LNoA=='),
-        224: (6.12, 0, 1, 7, 9, 'AtEAAAOAAAAAAAG7yAAAAMIAq65AagDEB5A/QBy5fBA='),
-        225: (6.12, 0, 1, 7, 9, 'AA0wAAgwAAAAAAG7yAAAAMIAq65AagDEB5A/QBy5fBA='),
-        226: (6.12, 0, 1, 7, 9, 'AN0AAIRXAAAAAAG7yAAAAMIAq65AagDEB5A/QBy5fBA='),
-        228: (6.12, 0, 2, 7, 8, 'B2VwAAAAABu8gAAADCAKuuQGoAxAeQP0AcuXwQ=='),
-        229: (6.12, 0, 0, 7, 10, 'AKoAAEVUAACqAAAAAAAbvIAAAAwgCrrkBqAMQHkD9AHLl8E='),
-        230: (9.78, 0, 4, 10, 6, 'G7uKvGAAANUA0Rq67LuziADUAACWBOkBwC25G8xQ'),
-        231: (5.5, 0, 4, 6, 9, 'CMxQPAHgeAAAeAAAPADRCMxgAIwAAAwAAHkA'),
-        232: (6.12, 0, 1, 6, 9, 'AdMAABoAAAAAB7ugOgCGfbu2eAAAPQCkB8yQ'),
-        233: (6.12, 0, 1, 6, 9, 'AAxQAGUAAAAAB7ugOgCGfbu2eAAAPQCkB8yQ'),
-        234: (6.12, 0, 1, 6, 9, 'AM4QBmOQAAAAB7ugOgCGfbu2eAAAPQCkB8yQ'),
-        235: (6.12, 0, 2, 6, 8, 'BnSAAAAAB7ugOgCGfbu2eAAAPQCkB8yQ'),
-        236: (3.06, 0, 1, 3, 9, 'pwCSAADwDwDwDwDwDwA='),
-        237: (3.06, 0, 1, 3, 9, 'BrGgAADwDwDwDwDwDwA='),
-        238: (3.06, -1, 1, 5, 9, 'BfcBsaIAAAAPAADwAA8AAPAADwAA8AA='),
-        239: (3.06, 0, 2, 4, 8, '4NAAAA8ADwAPAA8ADwAPAA=='),
-        241: (6.12, 0, 1, 6, 9, 'BsKACAuQAAAAO5zAPxClPACGPACGPACGPACG'),
-        242: (6.12, 0, 1, 6, 9, 'AdMAABoAAAAACMuQTACmeABpeABpPAClCMuQ'),
-        243: (6.12, 0, 1, 6, 9, 'AAxAAGUAAAAACMuQTACmeABpeABpPAClCMuQ'),
-        244: (6.12, 0, 1, 6, 9, 'AM4QB2SQAAAACMuQTACmeABpeABpPAClCMuQ'),
-        246: (6.12, 0, 2, 6, 8, 'BnSQAAAACMuQTACmeABpeABpPAClCMuQ'),
-        248: (6.72, 0, 3, 7, 8, 'AAAAAEy7sQ4gywLQleAthR4A6AWgS8uyAQAAAA=='),
-        249: (6.12, 0, 1, 6, 9, 'AMQAABoAAAAASwCWSwCWSwCWOwCWLQDWCsqW'),
-        250: (6.12, 0, 1, 6, 9, 'AA0wAHQAAAAASwCWSwCWSwCWOwCWLQDWCsqW'),
-        251: (6.12, 0, 1, 6, 9, 'AM0QB2SQAAAASwCWSwCWSwCWOwCWLQDWCsqW'),
-        252: (6.12, 0, 2, 6, 8, 'B2VwAAAASwCWSwCWSwCWOwCWLQDWCsqW'),
-        253: (5.5, 0, 1, 6, 11, 'ADwAAKEAAAAAwwC0aQHgDgWACVsgA7wAANYAAdEAfEAA'),
-        255: (5.5, 0, 2, 6, 10, 'DBowAAAAwwC0aQHgDgWACVsgA7wAANYAAdEAfEAA'),
-        339: (10.38, 0, 4, 10, 6, 'B8uku7I8AJ4ASngAXru6eABdAAA8AJ8gZwfLlMux'),
-        8211: (6.12, 0, 6, 7, 1, 'u7u7EA=='),
-        8212: (11, 0, 6, 11, 1, 'u7u7u7uw'),
-        8216: (2.44, 0, 2, 2, 3, 'GEVb'),
-        8217: (2.44, 0, 2, 2, 3, 'TAko'),
-        8220: (3.66, 0, 2, 4, 3, 'VIGAkJfD'),
-        8221: (3.66, 0, 2, 4, 3, 'l8QmY2OQ'),
-        8230: (11, 1, 9, 9, 1, 'iADwCIA='),
-        8722: (6.42, 0, 6, 6, 1, 'XMzL'),
-        9642: (3.91, 0, 5, 4, 3, 'b/Vv9W/1'),
-    },
-    ('sans', 10): {
-        32: (2.78, 0, 0, 0, 0, ''),
-        33: (2.78, 0, 3, 2, 7, 'HQ0MDAsAHQ=='),
-        34: (3.55, 0, 3, 4, 2, 'hLFzsA=='),
-        35: (5.56, 0, 3, 6, 7, 'AHCABECAv//4CAUg///0FwgARAgA'),
-        36: (5.56, 0, 2, 6, 9, 'AHIAG9yghXIwWpIABc1wAHKkYXKVS9yQAHIA'),
-        37: (8.89, 0, 3, 9, 7, 'OqEBoAklYJIAklZHAAOqKyqiAAk4M3ADgIM3ALACqhA='),
-        38: (6.67, 0, 3, 7, 7, 'AbqAAFcMAAK6YACtMKCFLEgJQG8QG6p8UA=='),
-        39: (1.91, 0, 3, 2, 2, 'dmU='),
-        40: (3.33, 0, 3, 4, 9, 'AbAKMBwASQBYAEkAHAAKMAGw'),
-        41: (3.33, 0, 3, 3, 9, 'hADAB2BJA6BJB2DAhQA='),
-        42: (3.89, 0, 3, 4, 4, 'BUCKpwqQJ4E='),
-        43: (5.84, 0, 3, 6, 6, 'AAAAAHQAAHQAW9yzAHQAAFMA'),
-        44: (2.78, 0, 9, 2, 2, 'HQg='),
-        45: (3.33, 0, 7, 3, 1, 'fLA='),
-        46: (2.78, 0, 9, 2, 1, 'HQ=='),
-        47: (2.78, 0, 3, 3, 7, 'AqBlCxCwSAkwwAA='),
-        48: (5.56, 0, 3, 6, 7, 'CbwwSgHAhQDBlACyhQDBSgHACLsw'),
-        49: (5.56, 0, 3, 6, 7, 'A9YACYYAAHYAAHYAAHYAAHYALN3A'),
-        50: (5.56, 0, 3, 6, 7, 'CbxQSAHQAALAABwwAsMAHCAAfszA'),
-        51: (5.56, 0, 3, 6, 7, 'CrxQVwHQAASwAM1AAADQdwDgG7xg'),
-        52: (5.56, 0, 3, 6, 7, 'AA5AAJtAA5hACxhAdghAi73CAAhA'),
-        53: (5.56, 0, 3, 6, 7, 'PsyASQAAXbxAEgHgAADBMwHQK7xA'),
-        54: (5.56, 0, 3, 6, 7, 'BbxgGgAwWqxQegDgaADBLADQB7xA'),
-        55: (5.56, 0, 3, 6, 7, 'XMzwAASQAAwAAFcAAMIAANAAAsAA'),
-        56: (5.56, 0, 3, 6, 7, 'CqtQWQDgOwOwC7xQdwDQdwDgCqtg'),
-        57: (5.56, 0, 3, 6, 7, 'CbwwWQPAdgDgWQHxCrrQFAKgC7sQ'),
-        58: (2.78, 0, 5, 2, 5, 'HQAAAB0='),
-        59: (2.78, 0, 5, 2, 6, 'HgAAAB0I'),
-        60: (5.84, 0, 4, 6, 5, 'AAOkBrgQiwAABrgQAAOk'),
-        61: (5.84, 0, 5, 6, 3, 'W7uzAAAAW7uz'),
-        62: (5.84, 0, 4, 6, 5, 'aSAAAptQAAHFAptQaSAA'),
-        63: (5.56, 0, 3, 6, 7, 'CsxweADRAADRABtAALMAAAAAANEA'),
-        64: (10.16, 0, 3, 10, 8, 'ABiZqBACoQACoAoVuoVyGSsAsmM3WALQoBocpqpQCUAAAwAAepmkAA=='),
-        65: (6.67, 0, 3, 7, 7, 'AG8QAAx3AAKgwACUCUANu7oGgADBwgAHcA=='),
-        66: (6.67, 0, 3, 7, 7, 'L8vDAsAEsCwAeALrvDAsAA0CwADgL8zGAA=='),
-        67: (7.22, 0, 3, 7, 7, 'ArzJANMAeFkAAAdwAABaAAAA5ABYArzJAA=='),
-        68: (7.22, 0, 3, 7, 7, 'L8y0AsAB0ywABZLAADssAAWSwAHTL8zEAA=='),
-        69: (6.67, 0, 3, 7, 7, 'L8zMAsAAACwAAAL8zJAsAAACwAAAL8zMIA=='),
-        70: (6.11, 0, 3, 6, 7, 'L8zILAAALAAAL8zHLAAALAAALAAA'),
-        71: (7.78, 0, 3, 8, 7, 'ArzKEB0wBpBZAAAAdwC88FoAANAOMAPgArzLIA=='),
-        72: (7.22, 0, 3, 7, 7, 'LAAIYsAAhiwACGL8zOYsAAhiwACGLAAIYA=='),
-        73: (2.78, 0, 3, 2, 7, 'HR0dHR0dHQ=='),
-        74: (5, 0, 3, 5, 7, 'AM5AAKQACkAApAAKSjDCPMgA'),
-        75: (6.67, 0, 3, 7, 7, 'LABqAsBbACxbAALtkAAsCnACwAxALAAdMA=='),
-        76: (5.56, 0, 3, 6, 7, 'LAAALAAALAAALAAALAAALAAAL8zC'),
-        77: (8.33, 0, 3, 8, 7, 'LzAA2CyQA9gqwAl4KnULWCobVlgqC7FYKgWwWA=='),
-        78: (7.22, 0, 3, 7, 7, 'LzAHYswAdip3B2KgwXYqBKZioAq2KgAeYA=='),
-        79: (7.78, 0, 3, 8, 7, 'ArzKEB0wBsBpAADShwAAtGkAANIeMAawA7zKEA=='),
-        80: (6.67, 0, 3, 7, 7, 'L8zFAsAB4CwADRLABNAuu5ICwAAALAAAAA=='),
-        81: (7.78, 0, 3, 8, 9, 'ArzKEB0wBsBpAADShwAAtGkAANIeMAWwA7zKEAADwAAAAJxA'),
-        82: (7.22, 0, 3, 7, 7, 'L8zKAsAAliwAG0Lrv1AsALUCwALQLAAJcA=='),
-        83: (6.67, 0, 3, 7, 7, 'B7vFAsABkB5QAAAp3FAAAC4VgADRCcvGAA=='),
-        84: (6.11, 0, 3, 6, 7, 'nN7KAGgAAGgAAGgAAGgAAGgAAGgA'),
-        85: (7.22, 0, 3, 7, 7, 'OwAHc7AAdzsAB3OwAHc7AAhg4QDTBMzGAA=='),
-        86: (6.67, 0, 3, 7, 7, 'wwAIZZAA0A0AWQCGCzACwcAAC4YAAF8AAA=='),
-        87: (9.44, 0, 3, 10, 7, 'wgDUALSGAskA4DsGbASgDgoqKGAKTAZsEAW5ArwAAfUA2AA='),
-        88: (6.67, 0, 3, 7, 7, 'PAAtAHcMMAC6cAAF8QABxbAAtAlgaQANIA=='),
-        89: (6.67, 0, 3, 7, 7, 'eAANIMMIcALCwAAI4wAALAAAAsAAACwAAA=='),
-        90: (6.11, 0, 3, 6, 7, 'TMzoAAHBAAwwAJcABaAALAAArczJ'),
-        91: (2.78, 0, 3, 3, 9, 'TXSQSQSQSQSQSQSQTXA='),
-        92: (2.78, 0, 3, 3, 7, 'wAkwRwCwCxB1AqA='),
-        93: (2.78, 0, 3, 3, 9, 'nhDBDBDBDBDBDBDBnhA='),
-        94: (4.69, 0, 3, 5, 4, 'BuEAtIBHCwsQZg=='),
-        95: (5.56, -1, 11, 7, 1, 'GqqqYA=='),
-        96: (3.33, 0, 2, 3, 2, 'PABV'),
-        97: (5.56, 0, 5, 6, 5, 'G6xAAAKwK5rAhgXAPKbV'),
-        98: (5.56, 0, 3, 6, 7, 'WAAAWAAAW6xwWwDgWQDBWwDgW5xg'),
-        99: (5, 0, 5, 5, 5, 'CrtWgACFAAaAAAq7UA=='),
-        100: (5.56, 0, 3, 5, 7, 'AADgAA4bqOaALoUA54AuHKjQ'),
-        101: (5.56, 0, 5, 6, 5, 'CqtQaADQjKqgaAAACqpw'),
-        102: (2.78, 0, 3, 3, 7, 'DJHAnoHAHAHAHAA='),
-        103: (5.56, 0, 5, 5, 7, 'G6jXcE6FAOdwPhyn4UAcC7tA'),
-        104: (5.56, 0, 3, 5, 7, 'WQAFkABbnHWwDVkA5ZAOWQDg'),
-        105: (2.22, 0, 3, 2, 7, 'RwBYWFhYWA=='),
-        106: (2.22, -1, 3, 3, 9, 'BHAABYBYBYBYBYBYLUA='),
-        107: (5, 0, 3, 5, 7, 'WAAFgABYCWWJYF7RBZPAWAaQ'),
-        108: (2.22, 0, 3, 2, 7, 'WFhYWFhYWA=='),
-        109: (8.33, 0, 5, 8, 5, 'WpxpxFsEwEpZBKA6WQSgOlkEoDo='),
-        110: (5.56, 0, 5, 5, 5, 'Wpx1sA1ZAOWQDlkA4A=='),
-        111: (5.56, 0, 5, 6, 5, 'CqtQaADghQDBaADgCqtQ'),
-        112: (5.56, 0, 5, 6, 7, 'WqxwXADgWQDBWwDgW5xgWAAAWAAA'),
-        113: (5.56, 0, 5, 5, 7, 'G6jWgC6FAOeAPhyo0AAOAADg'),
-        114: (3.33, 0, 5, 4, 5, 'WsJcAFkAWQBZAA=='),
-        115: (5, 0, 5, 5, 5, 'K6wngCIHuiQQWTurMA=='),
-        116: (2.78, 0, 4, 3, 6, 'GgnWOgOgOgHX'),
-        117: (5.56, 0, 5, 5, 5, 'WADlgA5YAOSQLhyn0A=='),
-        118: (5, 0, 5, 5, 5, 'wgLGgIYNDQCnkAPzAA=='),
-        119: (7.22, 0, 5, 8, 5, '0A8wsZRKgMBIkrRwC7CqMAqQbQA='),
-        120: (5, 0, 5, 5, 5, 'aAhgpqAD8gC1sIYHgA=='),
-        121: (5, 0, 5, 5, 7, 'wgLFkIUNDAB5gAHyACsAfCAA'),
-        122: (5, 0, 5, 5, 5, 'Sq5QBbACwQHCAI2qUA=='),
-        123: (3.34, 0, 3, 4, 9, 'B7EMEAwAHQCYAAwADAAMEAex'),
-        124: (2.59, 0, 3, 2, 9, 'GxsbGxsbGxsb'),
-        125: (3.34, 0, 3, 4, 9, 'nAAMEAsQCUADwQogCxALEIsA'),
-        126: (5.84, 0, 5, 6, 2, 'S6EDQBqz'),
-        183: (3.33, 1, 6, 2, 2, '0hA='),
-        223: (6.11, 0, 3, 6, 7, 'CLxwOwDQSQhwWQwgWQLDWQBKWVvE'),
-        224: (5.56, 0, 2, 6, 8, 'BLAAAGQAAAAAG6xAAAKwK5rAhgXAPKbV'),
-        225: (5.56, 0, 2, 6, 8, 'ADwAAJEAAAAAG6xAAAKwK5rAhgXAPKbV'),
-        226: (5.56, 0, 2, 6, 8, 'AucACSoQAAAAG6xAAAKwK5rAhgXAPKbV'),
-        228: (5.56, 0, 3, 6, 7, 'CSoQAAAAG6xAAAKwK5rAhgXAPKbV'),
-        229: (5.56, 0, 1, 6, 9, 'ApcABigAApcAAAAAG6xAAAKwK5rAhgXAPKbV'),
-        230: (8.89, 0, 5, 9, 5, 'K6uLqQAAPQCUO5rqqklAXQAATKdrqhA='),
-        231: (5, 0, 5, 5, 7, 'CrtWgACFAAaAAArfUAGgAJUA'),
-        232: (5.56, 0, 2, 6, 8, 'AsAAAEYAAAAACqtQaADQjKqgaAAACqpw'),
-        233: (5.56, 0, 2, 6, 8, 'AB0QAIIAAAAACqtQaADQjKqgaAAACqpw'),
-        234: (5.56, 0, 2, 6, 8, 'ANoACDgwAAAACqtQaADQjKqgaAAACqpw'),
-        235: (5.56, 0, 3, 6, 7, 'CDkgAAAACqtQaADQjKqgaAAACqpw'),
-        236: (2.78, 0, 2, 3, 8, 'pQCgAADQDQDQDQDQ'),
-        237: (2.78, 0, 2, 3, 8, 'CHKAAADQDQDQDQDQ'),
-        238: (2.78, -1, 2, 4, 8, 'BvMaKgAAANAA0ADQANAA0A=='),
-        239: (2.78, 0, 3, 3, 7, 'sKAADQDQDQDQDQA='),
-        241: (5.56, 0, 2, 5, 8, 'B6BwcsMAAASpx0wA5JAOSQDkkA4='),
-        242: (5.56, 0, 2, 6, 8, 'AtAAAEcAAAAACqtQaADghQDBaADgCqtQ'),
-        243: (5.56, 0, 2, 6, 8, 'ACwAAJEAAAAACqtQaADghQDBaADgCqtQ'),
-        244: (5.56, 0, 2, 6, 8, 'AekACDgwAAAACqtQaADghQDBaADgCqtQ'),
-        246: (5.56, 0, 3, 6, 7, 'CDkgAAAACqtQaADghQDBaADgCqtQ'),
-        248: (6.11, 0, 4, 6, 7, 'AAABB7q1LAbkSleGLnCkS7uQEAAA'),
-        249: (5.56, 0, 2, 5, 8, 'AdAAA3AAAAWQDlkA5ZAOSgLgyo0='),
-        250: (5.56, 0, 2, 5, 8, 'ADwACRAAAAWQDlkA5ZAOSgLgyo0='),
-        251: (5.56, 0, 2, 5, 8, 'AekAg4MAAAWQDlkA5ZAOSgLgyo0='),
-        252: (5.56, 0, 3, 5, 7, 'CSoQAABZAOWQDlkA5KAuDKjQ'),
-        253: (5, 0, 2, 5, 10, 'AHgAGQAAAAwgLFkIUNDAB5gAHyACsAfCAA=='),
-        255: (5, 0, 3, 5, 9, 'CwsAAADCAsWQhQ0MAHmAAfIAKwB8IAA='),
-        339: (9.44, 0, 5, 9, 5, 'Cqt6qzaADmAchQC8qqaADmAACqtqq2A='),
-        8211: (5.56, 0, 7, 6, 1, 'qqqm'),
-        8212: (10, 0, 7, 10, 1, 'qqqqqqo='),
-        8216: (2.22, 0, 3, 2, 2, 'NVk='),
-        8217: (2.22, 0, 3, 2, 2, 'WRY='),
-        8220: (3.33, 0, 3, 3, 2, 'cYpe'),
-        8221: (3.33, 0, 3, 3, 2, 'lfUo'),
-        8230: (10, 1, 9, 8, 1, 'pQdwSg=='),
-        8722: (5.84, 0, 6, 6, 1, 'W7u0'),
-        9642: (3.55, 0, 6, 4, 2, 'f/B/8A=='),
-    },
-    ('sans', 9): {
-        32: (2.5, 0, 0, 0, 0, ''),
-        33: (2.5, 0, 2, 2, 7, 'KioaGRkAOg=='),
-        34: (3.19, 0, 2, 3, 2, 'ksga'),
-        35: (5, 0, 2, 5, 7, 'AzJQYFK///BwcP//skFgUUMA'),
-        36: (5, 0, 1, 5, 9, 'AIACrbOTgVeJAAbbIAgrQIC1vbMAgAA='),
-        37: (8, 0, 2, 8, 7, 'SYAJEJCQNwCQkKAASYVZlAAKGQoAcwkKAYAIlA=='),
-        38: (6, 0, 2, 6, 7, 'A6ogBzRgBYoQGsBjg1egkguQKpio'),
-        39: (1.72, 0, 2, 2, 2, 'g3M='),
-        40: (3, 0, 2, 3, 9, 'A4CwKgVwZgVwKgCwA5A='),
-        41: (3, 0, 2, 3, 9, 'kwGwCiB1BmB1CiGwkwA='),
-        42: (3.5, 0, 2, 4, 4, 'CACLkwxQNIA='),
-        43: (5.25, 0, 3, 5, 5, 'AJAACgBa6oAKAABQAA=='),
-        44: (2.5, 0, 8, 2, 2, 'Kgc='),
-        45: (3, 0, 6, 3, 1, 'a2A='),
-        46: (2.5, 0, 8, 2, 1, 'Kg=='),
-        47: (2.5, 0, 2, 3, 7, 'BVCRCwGQVQkQsAA='),
-        48: (5, 0, 2, 5, 7, 'CakFcHWDA5kgKoMDlXB1CakA'),
-        49: (5, 0, 2, 5, 7, 'BOEBaxAAsQALEACxAAsQOutg'),
-        50: (5, 0, 2, 5, 7, 'G6sEQHYACEADsAOxAcAAfKpQ'),
-        51: (5, 0, 2, 5, 7, 'G6sEMHYACjAbsAAFhjBYK6sQ'),
-        52: (5, 0, 2, 5, 7, 'AD0ACsAGXAGwwIMMB6rnAAwA'),
-        53: (5, 0, 2, 5, 7, 'TaolYABsqwAAZwADlDBmK6oA'),
-        54: (5, 0, 2, 5, 7, 'B6sSgCF6mxhwV3UDlJBmCaoA'),
-        55: (5, 0, 2, 5, 7, 'WqyAAKEAOQAKIADAADkABXAA'),
-        56: (5, 0, 2, 5, 7, 'GpoWYGZJCUG6sYQEiEBIGpoQ'),
-        57: (5, 0, 2, 5, 7, 'CqkGYISDBXZgeAuaciBzG6gA'),
-        58: (2.5, 0, 4, 2, 5, 'KgAAACo='),
-        59: (2.5, 0, 4, 2, 6, 'KwAAACoH'),
-        60: (5.25, 0, 3, 5, 5, 'AAaAakCIAAB6QAAGgA=='),
-        61: (5.25, 0, 4, 5, 3, 'WqqAAABaqoA='),
-        62: (5.25, 0, 3, 5, 5, 'ZxAAOoEABcA6gWgQAA=='),
-        63: (5, 0, 2, 5, 7, 'G7smQDkABIAEsADAAAAAAcAA'),
-        64: (9.14, 0, 2, 9, 8, 'ADmIkgBIAACgCgmXlUJ2UFdERZIKOBJ0uHlwChAAEAAZmJcA'),
-        65: (6, 0, 2, 6, 7, 'AJoAALoABWVgCxCwHarRdQBXwAAM'),
-        66: (6, 0, 2, 6, 7, 'TauQSQCxSQHATauQSQBmSQB2Taqg'),
-        67: (6.5, 0, 2, 7, 7, 'BLuzAcEBsGcAAAhQAABnAAAB0QCwBMuzAA=='),
-        68: (6.5, 0, 2, 7, 7, 'TauABJAGkEkADQSQAMBJAA0EkAaATauQAA=='),
-        69: (6, 0, 2, 6, 7, 'Tbu0SQAASQAATaqhSQAASQAATbu2'),
-        70: (5.5, 0, 2, 6, 7, 'TbuxSQAASQAATbuwSQAASQAASQAA'),
-        71: (7, 0, 2, 7, 7, 'BLvFAcEAwGcAAAhQO9VnAAdR0QC0BLu2AA=='),
-        72: (6.5, 0, 2, 6, 7, 'SQAcSQAcSQAcTbu8SQAcSQAcSQAc'),
-        73: (2.5, 0, 2, 2, 7, 'KioqKioqKg=='),
-        74: (4.5, 0, 2, 4, 7, 'Ar0ADQANAA0ADbEbTLM='),
-        75: (6, 0, 2, 6, 7, 'SQDCSQpASZYATtQAShwQSQSwSQCI'),
-        76: (5, 0, 2, 5, 7, 'SQAEkABJAASQAEkABJAATbtw'),
-        77: (7.5, 0, 2, 7, 7, 'TwAHxNUAq0igKMR6BzxHVaDEcLgMRwswwA=='),
-        78: (6.5, 0, 2, 6, 7, 'ThAMS4AMR6EMRykMRwk7RwG7RwCM'),
-        79: (7, 0, 2, 7, 7, 'BLu0AcABwXYABnhAAFh2AAZi0QDBBLu0AA=='),
-        80: (6, 0, 2, 6, 7, 'TaqgSQB2SQBXSQCjTalQSQAASQAA'),
-        81: (7, 0, 2, 7, 9, 'BLu0AcABwXYABnhAAFh2AAZiwADBBbu0AACUAAACxwA='),
-        82: (6.5, 0, 2, 7, 7, 'Taq0BJABwEkAWgTayhBJAcAEkAlQSQAsAA=='),
-        83: (6, 0, 2, 6, 7, 'CKqgOQBzLTAAA62QAACHRABXGqqg'),
-        84: (5.5, 0, 2, 6, 7, 'i+uzAKIAAKIAAKIAAKIAAKIAAKIA'),
-        85: (6.5, 0, 2, 6, 7, 'WAANWAANWAANWAANSAAcHABZBbuh'),
-        86: (6, 0, 2, 6, 7, 'wQAcZgBmGwDBCxGwBXdQALsAAJkA'),
-        87: (8.5, 0, 2, 9, 7, '0ATACFlAjADBSApkDADAooSADEcKdACKMKsABPAHwAA='),
-        88: (6, 0, 2, 6, 7, 'SQCVCkOgAcsQAJsAA6owDBHAdgBn'),
-        89: (6, 0, 2, 6, 7, 'hgBoDADABXhQALsAAGYAAGYAAGYA'),
-        90: (5.5, 0, 2, 6, 7, 'S7vwAAdgACsAAMIAB2AAKwAArLuy'),
-        91: (2.5, 0, 2, 3, 9, 'WzVgVgVgVgVgVgVgWzA='),
-        92: (2.5, 0, 2, 3, 7, 'sAkQVQGQCwCRBVA='),
-        93: (2.5, 0, 2, 2, 9, 'jQwMDAwMDAyN'),
-        94: (4.22, 0, 2, 5, 3, 'CaAChVChCgA='),
-        95: (5, -1, 10, 7, 1, 'GZmZEA=='),
-        96: (3, 0, 1, 3, 2, 'SQBy'),
-        97: (5, 0, 4, 5, 5, 'K5oAAIQ6jElAtEyXsA=='),
-        98: (5, 0, 2, 5, 7, 'ZgAGYABqmxaAWGYDloBXaosQ'),
-        99: (4.5, 0, 4, 5, 5, 'GqoHUACTAAdQABqqEA=='),
-        100: (5, 0, 2, 5, 7, 'AAZgAGYbimdQhpMGaFCGK5pg'),
-        101: (5, 0, 4, 5, 5, 'GpoXUFebmVdgABqaIA=='),
-        102: (2.5, 0, 2, 3, 7, 'DFOQnUOQOQOQOQA='),
-        103: (5, 0, 4, 5, 7, 'G5lnUJaTBmhQliuKYSB1G6oA'),
-        104: (5, 0, 2, 5, 7, 'ZgAGYABqjBaAZmYGZmBmZgZg'),
-        105: (2, 0, 2, 2, 7, 'RABmZmZmZg=='),
-        106: (2, -1, 2, 3, 9, 'BEAABmBmBmBmBmBmLDA='),
-        107: (4.5, 0, 2, 5, 7, 'ZgAGYABmGxZrIG2wBmdwZgsg'),
-        108: (2, 0, 2, 2, 7, 'ZmZmZmZmZg=='),
-        109: (7.5, 0, 4, 7, 5, 'aptqhoCkDGYKIMZgogxmCiDA'),
-        110: (5, 0, 4, 5, 5, 'apwmgGZmBmZgZmYGYA=='),
-        111: (5, 0, 4, 5, 5, 'GpoXUFeTA5dQVxqaEA=='),
-        112: (5, 0, 4, 5, 7, 'apsWkFhmA5aAV2qLFmAAZgAA'),
-        113: (5, 0, 4, 5, 7, 'G4pnUIaTBmhQliuaYABmAAZg'),
-        114: (3, 0, 4, 3, 5, 'apaQZgZgZgA='),
-        115: (4.5, 0, 4, 5, 5, 'OqkHYCAYxwMAsVuZAA=='),
-        116: (2.5, 0, 3, 3, 6, 'JwrDVwVwRwLU'),
-        117: (5, 0, 4, 5, 5, 'ZgZmYGZmBmZghiyaYA=='),
-        118: (4.5, 0, 4, 5, 5, 'wAhHUMAaOQC4MAbQAA=='),
-        119: (6.5, 0, 4, 7, 5, 'wEwFaRigkVWVSwGpGYAMUNQA'),
-        120: (4.5, 0, 4, 5, 5, 'dQwQuEAF0AC3YJQLEA=='),
-        121: (4.5, 0, 4, 5, 7, 'wQhGYMAbKQCpMATQAFcAagAA'),
-        122: (4.5, 0, 4, 5, 5, 'Sa4ACVAEkAHAAJyZAA=='),
-        123: (3, 0, 2, 3, 9, 'CYDACwKglQCwCwDACYA='),
-        124: (2.34, 0, 2, 2, 9, 'ODg4ODg4ODg4'),
-        125: (3, 0, 2, 3, 9, 'iQDACwCiBZCwCwDAiQA='),
-        126: (5.25, 0, 4, 5, 2, 'WXAzA6g='),
-        183: (3, 1, 5, 1, 1, '0A=='),
-        223: (5.5, 0, 2, 6, 7, 'CqsgSAVwVgsQZisAZgegZgCxZnqg'),
-        224: (5, 0, 1, 5, 8, 'B3AACQAAAAK5oAAIQ6jElAtEyXs='),
-        225: (5, 0, 1, 5, 8, 'AHYACQAAAAK5oAAIQ6jElAtEyXs='),
-        226: (5, 0, 1, 5, 8, 'BPIAopAAAAK5oAAIQ6jElAtEyXs='),
-        228: (5, 0, 2, 5, 7, 'CQgAAAArmgAAhDqMSUC0TJew'),
-        229: (5, 0, 0, 5, 9, 'BJMAcHAEkwAAACuaAACEOoxJQLRMl7A='),
-        230: (8, 0, 4, 8, 5, 'O5qpoQAJYFc6jLmVogtgAFuUqaI='),
-        231: (4.5, 0, 4, 5, 7, 'GqoHUACTAAdQABr8EAZAAqEA'),
-        232: (5, 0, 1, 5, 8, 'BJAABxAAAAGpoXUFebmVdgABqaI='),
-        233: (5, 0, 1, 5, 8, 'AFgACQAAAAGpoXUFebmVdgABqaI='),
-        234: (5, 0, 1, 5, 8, 'AvQAkpAAAAGpoXUFebmVdgABqaI='),
-        235: (5, 0, 2, 5, 7, 'CQkAAAAamhdQV5uZV2AAGpog'),
-        236: (2.5, 0, 1, 2, 8, 'owgAKioqKio='),
-        237: (2.5, 0, 1, 3, 8, 'CzNgAAKgKgKgKgKg'),
-        238: (2.5, -1, 1, 4, 8, 'B+AZNwAAAqACoAKgAqACoA=='),
-        239: (2.5, 0, 2, 3, 7, 'k2AAKgKgKgKgKgA='),
-        241: (5, 0, 1, 5, 8, 'CGUQZaAAAAWpwlkGZXBXVwV1cFc='),
-        242: (5, 0, 1, 5, 8, 'BJAAByAAAAGpoXUFeTA5dQVxqaE='),
-        243: (5, 0, 1, 5, 8, 'AGgACQAAAAGpoXUFeTA5dQVxqaE='),
-        244: (5, 0, 1, 5, 8, 'A/MAkpAAAAGpoXUFeTA5dQVxqaE='),
-        246: (5, 0, 2, 5, 7, 'CQkAAAAamhdQV5MDl1BXGpoQ'),
-        248: (5.5, 0, 3, 6, 7, 'AAAACZqgOQrAV4LQPkGwW5owAAAA'),
-        249: (5, 0, 1, 5, 8, 'BKAAByAAAAZgZmYGZmBmVwhhyaY='),
-        250: (5, 0, 1, 5, 8, 'AHYACQAAAAZgZmYGZmBmVwhhyaY='),
-        251: (5, 0, 1, 5, 8, 'A/MAkpAAAAZgZmYGZmBmVwhhyaY='),
-        252: (5, 0, 2, 5, 7, 'CQgAAABmBmZgZmYGZXCGHJpg'),
-        253: (4.5, 0, 1, 5, 10, 'ALMANgAAAAwQhGYMAbKQCpMATQAFcAagAA=='),
-        255: (4.5, 0, 2, 5, 9, 'CTYAAADBCEZgwBspAKkwBNAAVwBqAAA='),
-        339: (8.5, 0, 4, 9, 5, 'Gpp6pQdQTQDAkwLpmQdQTQAAGpp6mAA='),
-        8211: (5, 0, 6, 5, 1, 'mZmQ'),
-        8212: (9, 0, 6, 9, 1, 'mZmZmZA='),
-        8216: (2, 0, 2, 2, 2, 'QmY='),
-        8217: (2, 0, 2, 2, 2, 'ZiQ='),
-        8220: (3, 0, 2, 3, 2, 'YWpq'),
-        8221: (3, 0, 2, 3, 2, 'pqYW'),
-        8230: (9, 1, 8, 7, 1, 'wQ0BwA=='),
-        8722: (5.25, 0, 5, 5, 1, 'WqqA'),
-        9642: (3.19, 0, 5, 3, 2, 'j7j7'),
-    },
+# Hand-drawn bitmap faces. Each glyph is (advance, (row0, ..., row6)):
+# rows are 5-bit values, bit 4 is the leftmost column, bit 0 the
+# rightmost. Row 0 is the top of the cell; the baseline is row 6.
+# Capitals and digits use the full cell; lowercase x-height letters
+# sit on rows 2..6, ascenders reach row 0, descenders tail to row 6.
+# No font file, no package data: every row below was drawn by hand.
+FONT_5X7 = {
+    32: (3, (0, 0, 0, 0, 0, 0, 0)),
+    33: (3, (4, 4, 4, 4, 4, 0, 4)),
+    34: (4, (10, 10, 10, 0, 0, 0, 0)),
+    35: (5, (10, 10, 31, 10, 10, 31, 10)),
+    36: (5, (4, 15, 20, 14, 5, 30, 4)),
+    37: (5, (25, 26, 2, 4, 8, 11, 19)),
+    38: (5, (12, 18, 20, 8, 21, 18, 13)),
+    39: (3, (4, 4, 8, 0, 0, 0, 0)),
+    40: (4, (2, 4, 8, 8, 8, 4, 2)),
+    41: (4, (8, 4, 2, 2, 2, 4, 8)),
+    42: (5, (0, 4, 21, 14, 21, 4, 0)),
+    43: (5, (0, 4, 4, 31, 4, 4, 0)),
+    44: (3, (0, 0, 0, 0, 0, 12, 8)),
+    45: (5, (0, 0, 0, 31, 0, 0, 0)),
+    46: (3, (0, 0, 0, 0, 0, 0, 12)),
+    47: (5, (1, 1, 2, 2, 4, 8, 16)),
+    48: (5, (14, 17, 19, 21, 25, 17, 14)),
+    49: (5, (4, 12, 4, 4, 4, 4, 14)),
+    50: (5, (14, 17, 1, 2, 4, 8, 31)),
+    51: (5, (31, 2, 4, 2, 1, 17, 14)),
+    52: (5, (2, 6, 10, 18, 31, 2, 2)),
+    53: (5, (31, 16, 30, 1, 1, 17, 14)),
+    54: (5, (6, 8, 16, 30, 17, 17, 14)),
+    55: (5, (31, 1, 2, 4, 8, 8, 8)),
+    56: (5, (14, 17, 17, 14, 17, 17, 14)),
+    57: (5, (14, 17, 17, 15, 1, 2, 12)),
+    58: (3, (0, 12, 0, 0, 0, 12, 0)),
+    59: (3, (0, 12, 0, 0, 0, 12, 8)),
+    60: (5, (2, 4, 8, 16, 8, 4, 2)),
+    61: (5, (0, 0, 31, 0, 31, 0, 0)),
+    62: (5, (8, 4, 2, 1, 2, 4, 8)),
+    63: (5, (14, 17, 1, 2, 4, 0, 4)),
+    64: (5, (14, 17, 23, 21, 23, 16, 14)),
+    65: (5, (14, 17, 17, 31, 17, 17, 17)),
+    66: (5, (30, 17, 17, 30, 17, 17, 30)),
+    67: (5, (14, 17, 16, 16, 16, 17, 14)),
+    68: (5, (30, 17, 17, 17, 17, 17, 30)),
+    69: (5, (31, 16, 16, 30, 16, 16, 31)),
+    70: (5, (31, 16, 16, 30, 16, 16, 16)),
+    71: (5, (14, 17, 16, 23, 17, 17, 15)),
+    72: (5, (17, 17, 17, 31, 17, 17, 17)),
+    73: (5, (14, 4, 4, 4, 4, 4, 14)),
+    74: (5, (7, 2, 2, 2, 2, 18, 12)),
+    75: (5, (17, 18, 20, 24, 20, 18, 17)),
+    76: (5, (16, 16, 16, 16, 16, 16, 31)),
+    77: (5, (17, 27, 21, 21, 17, 17, 17)),
+    78: (5, (17, 25, 21, 19, 17, 17, 17)),
+    79: (5, (14, 17, 17, 17, 17, 17, 14)),
+    80: (5, (30, 17, 17, 30, 16, 16, 16)),
+    81: (5, (14, 17, 17, 17, 21, 18, 13)),
+    82: (5, (30, 17, 17, 30, 20, 18, 17)),
+    83: (5, (15, 16, 16, 14, 1, 1, 30)),
+    84: (5, (31, 4, 4, 4, 4, 4, 4)),
+    85: (5, (17, 17, 17, 17, 17, 17, 14)),
+    86: (5, (17, 17, 17, 17, 17, 10, 4)),
+    87: (6, (17, 17, 17, 21, 21, 27, 17)),
+    88: (5, (17, 17, 10, 4, 10, 17, 17)),
+    89: (5, (17, 17, 10, 4, 4, 4, 4)),
+    90: (5, (31, 1, 2, 4, 8, 16, 31)),
+    91: (4, (14, 8, 8, 8, 8, 8, 14)),
+    92: (5, (16, 8, 8, 4, 4, 2, 1)),
+    93: (4, (14, 2, 2, 2, 2, 2, 14)),
+    94: (5, (4, 10, 17, 0, 0, 0, 0)),
+    95: (5, (0, 0, 0, 0, 0, 0, 31)),
+    96: (3, (8, 4, 2, 0, 0, 0, 0)),
+    97: (5, (0, 0, 14, 1, 15, 17, 15)),
+    98: (5, (16, 16, 30, 17, 17, 17, 30)),
+    99: (5, (0, 0, 14, 16, 16, 17, 14)),
+    100: (5, (1, 1, 15, 17, 17, 17, 15)),
+    101: (5, (0, 0, 14, 17, 31, 16, 14)),
+    102: (4, (6, 8, 8, 30, 8, 8, 8)),
+    103: (5, (0, 14, 17, 17, 15, 1, 14)),
+    104: (5, (16, 16, 30, 17, 17, 17, 17)),
+    105: (3, (4, 0, 12, 4, 4, 4, 14)),
+    106: (3, (2, 0, 6, 2, 2, 18, 12)),
+    107: (5, (16, 16, 18, 20, 24, 20, 18)),
+    108: (3, (12, 4, 4, 4, 4, 4, 14)),
+    109: (6, (0, 0, 26, 21, 21, 21, 21)),
+    110: (5, (0, 0, 30, 17, 17, 17, 17)),
+    111: (5, (0, 0, 14, 17, 17, 17, 14)),
+    112: (5, (0, 0, 30, 17, 17, 30, 16)),
+    113: (5, (0, 0, 15, 17, 17, 15, 1)),
+    114: (4, (0, 0, 22, 28, 16, 16, 16)),
+    115: (5, (0, 0, 15, 16, 14, 1, 30)),
+    116: (3, (4, 4, 31, 4, 4, 4, 6)),
+    117: (5, (0, 0, 17, 17, 17, 19, 14)),
+    118: (5, (0, 0, 17, 17, 17, 10, 4)),
+    119: (6, (0, 0, 17, 21, 21, 21, 10)),
+    120: (5, (0, 0, 17, 10, 4, 10, 17)),
+    121: (5, (0, 0, 17, 17, 15, 1, 14)),
+    122: (5, (0, 0, 31, 2, 4, 8, 31)),
+    123: (4, (6, 8, 8, 30, 8, 8, 6)),
+    124: (3, (4, 4, 4, 4, 4, 4, 4)),
+    125: (4, (12, 2, 2, 15, 2, 2, 12)),
+    126: (5, (0, 0, 0, 8, 21, 0, 0)),
+    8212: (5, (0, 0, 0, 31, 0, 0, 0)),
+    8211: (5, (0, 0, 0, 14, 0, 0, 0)),
+    8722: (5, (0, 0, 0, 14, 0, 0, 0)),
+    183: (3, (0, 0, 0, 4, 0, 0, 0)),
+    9642: (5, (0, 0, 14, 14, 14, 0, 0)),
+    8217: (3, (4, 4, 8, 0, 0, 0, 0)),
+    8216: (3, (8, 8, 4, 0, 0, 0, 0)),
+    8220: (5, (10, 10, 8, 0, 0, 0, 0)),
+    8221: (5, (10, 10, 10, 0, 0, 0, 0)),
+    233: (5, (2, 0, 14, 17, 31, 16, 14)),
+    237: (3, (2, 0, 12, 4, 4, 4, 14)),
+    252: (5, (10, 0, 17, 17, 17, 19, 14)),
+}
+
+# Masthead display face: 7 columns (bit 6 is the leftmost), 11 rows,
+# one line per letter. Only the letters of the masthead title are
+# needed, plus a space. Drawn by hand, same grid as the text face.
+FONT_DISPLAY = {
+    32: (4, (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+    65: (8, (8, 20, 34, 34, 62, 65, 65, 65, 65, 65, 65)),
+    68: (8, (124, 66, 65, 65, 65, 65, 65, 65, 65, 66, 124)),
+    69: (8, (126, 64, 64, 64, 124, 64, 64, 64, 64, 64, 126)),
+    71: (8, (60, 66, 64, 64, 64, 71, 65, 65, 66, 66, 60)),
+    72: (8, (65, 65, 65, 65, 65, 127, 65, 65, 65, 65, 65)),
+    73: (8, (62, 8, 8, 8, 8, 8, 8, 8, 8, 8, 62)),
+    76: (8, (64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 126)),
+    78: (8, (65, 97, 81, 73, 69, 67, 65, 65, 65, 65, 65)),
+    79: (8, (60, 66, 65, 65, 65, 65, 65, 65, 65, 66, 60)),
+    80: (8, (124, 66, 65, 65, 65, 124, 64, 64, 64, 64, 64)),
+    82: (8, (124, 66, 65, 65, 65, 124, 66, 68, 72, 80, 96)),
+    84: (8, (127, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8)),
+    87: (8, (65, 65, 65, 65, 65, 65, 65, 85, 85, 42, 20)),
 }
 
 
-class Font:
-    """One embedded bitmap font face at one pixel size."""
+class Face:
+    """One bitmap face: a glyph table, a cell size and a scale.
 
-    __slots__ = ("kind", "size", "glyphs", "space_adv")
+    `bold` thickens every stroke by one pixel to the right, inside the
+    glyph cell (bits | bits >> 1), so bold and regular share a table.
+    """
 
-    def __init__(self, kind, size):
-        self.kind = kind
-        self.size = size
-        raw = _FONT_DATA[(kind, size)]
-        glyphs = {}
-        for code, (adv, xo, yo, w, h, b64) in raw.items():
-            glyphs[code] = (adv, xo, yo, w, h,
-                            base64.b64decode(b64) if b64 else b"")
-        self.glyphs = glyphs
-        self.space_adv = glyphs[32][0]
+    __slots__ = ("table", "rows", "cols", "scale", "bold")
+
+    def __init__(self, table, rows, cols, scale, bold=False):
+        self.table = table
+        self.rows = rows
+        self.cols = cols
+        self.scale = scale
+        self.bold = bold
 
     def advance(self, ch):
-        g = self.glyphs.get(ord(ch))
-        return self.space_adv if g is None else g[0]
+        g = self.table.get(ord(ch))
+        if g is None:
+            return 3 * self.scale
+        return g[0] * self.scale
 
-    def textlength(self, s):
+    def width(self, s):
         total = 0
         for ch in s:
             total += self.advance(ch)
         return total
 
 
-_FONT_CACHE = {}
+_FACES = {}
 
 
-def font(kind, size):
+def face(kind, size):
+    """The face for a (kind, size) pair, cached.
+
+    kind is "serif_b", "sans_b" or "sans". The 56pt masthead uses the
+    display face; every other size uses the 5x7 face, at scale 2 for
+    13pt and up and scale 1 below it.
+    """
     key = (kind, size)
-    f = _FONT_CACHE.get(key)
-    if f is None:
-        f = Font(kind, size)
-        _FONT_CACHE[key] = f
-    return f
+    got = _FACES.get(key)
+    if got is not None:
+        return got
+    if kind == "serif_b" and size == 56:
+        made = Face(FONT_DISPLAY, 11, 7, 5)
+    else:
+        scale = 2 if size >= 13 else 1
+        made = Face(FONT_5X7, 7, 5, scale, bold=(kind != "sans"))
+    _FACES[key] = made
+    return made
 
 # ---------------------------------------------------------------- canvas
-class Canvas:
-    """An RGB image held as a flat bytearray, with drawing primitives."""
+class Page:
+    """An RGB picture kept as one flat bytearray, with primitives."""
 
     def __init__(self, w, h, bg):
         self.w = w
         self.h = h
         self.buf = bytearray(bytes(bg) * (w * h))
 
-    def set_px(self, x, y, rgb):
+    def px(self, x, y, rgb):
         if 0 <= x < self.w and 0 <= y < self.h:
             o = (y * self.w + x) * 3
             self.buf[o] = rgb[0]
             self.buf[o + 1] = rgb[1]
             self.buf[o + 2] = rgb[2]
 
-    def fill_rect(self, x0, y0, x1, y1, rgb):
+    def rect(self, x0, y0, x1, y1, rgb):
         if x1 < x0:
             x0, x1 = x1, x0
         if y1 < y0:
@@ -1887,7 +378,8 @@ class Canvas:
             o = y * stride + x0 * 3
             self.buf[o:o + len(row)] = row
 
-    def _thin_line(self, x0, y0, x1, y1, rgb):
+    def thin(self, x0, y0, x1, y1, rgb):
+        """One-pixel line (Bresenham)."""
         dx = abs(x1 - x0)
         dy = -abs(y1 - y0)
         sx = 1 if x0 < x1 else -1
@@ -1913,23 +405,24 @@ class Canvas:
 
     def line(self, x0, y0, x1, y1, rgb, width=1):
         if width <= 1:
-            self._thin_line(x0, y0, x1, y1, rgb)
+            self.thin(x0, y0, x1, y1, rgb)
             return
         dx, dy = x1 - x0, y1 - y0
         length = math.hypot(dx, dy)
         if length == 0:
             r = width // 2
-            self.fill_rect(x0 - r, y0 - r, x0 + r, y0 + r, rgb)
+            self.rect(x0 - r, y0 - r, x0 + r, y0 + r, rgb)
             return
-        # Thick line as a filled polygon: a solid band of `width`
-        # centred on the segment (the old parallel-lines version left
-        # gaps on diagonals, making arcs look dotted).
+        # A thick line is a solid band of `width` centred on the
+        # segment, drawn as one filled polygon: drawing it as
+        # parallel thin lines would leave gaps on diagonals.
         px = -dy / length * (width / 2.0)
         py = dx / length * (width / 2.0)
-        self.fill_polygon([(x0 + px, y0 + py), (x1 + px, y1 + py),
-                           (x1 - px, y1 - py), (x0 - px, y0 - py)], rgb)
+        self.poly([(x0 + px, y0 + py), (x1 + px, y1 + py),
+                   (x1 - px, y1 - py), (x0 - px, y0 - py)], rgb)
 
-    def fill_ellipse(self, x0, y0, x1, y1, rgb):
+    def disc(self, x0, y0, x1, y1, rgb):
+        """Filled ellipse inside the box (x0, y0, x1, y1)."""
         if x1 < x0:
             x0, x1 = x1, x0
         if y1 < y0:
@@ -1939,7 +432,7 @@ class Canvas:
         rx = (x1 - x0) / 2.0
         ry = (y1 - y0) / 2.0
         if rx <= 0 or ry <= 0:
-            self.fill_rect(x0, y0, x1, y1, rgb)
+            self.rect(x0, y0, x1, y1, rgb)
             return
         for y in range(max(y0, 0), min(y1, self.h - 1) + 1):
             t = (y - cy) / ry
@@ -1948,9 +441,10 @@ class Canvas:
             dx = rx * math.sqrt(1 - t * t)
             xa = int(math.ceil(cx - dx))
             xb = int(math.floor(cx + dx))
-            self.fill_rect(xa, y, xb, y, rgb)
+            self.rect(xa, y, xb, y, rgb)
 
-    def ellipse_outline(self, x0, y0, x1, y1, rgb):
+    def ring(self, x0, y0, x1, y1, rgb):
+        """One-pixel ellipse outline."""
         cx = (x0 + x1) / 2.0
         cy = (y0 + y1) / 2.0
         rx = (x1 - x0) / 2.0
@@ -1958,11 +452,12 @@ class Canvas:
         steps = max(int(2 * math.pi * max(rx, ry)), 24)
         for i in range(steps + 1):
             a = 2 * math.pi * i / steps
-            self.set_px(int(round(cx + rx * math.cos(a))),
-                        int(round(cy + ry * math.sin(a))), rgb)
+            self.px(int(round(cx + rx * math.cos(a))),
+                    int(round(cy + ry * math.sin(a))), rgb)
 
     def arc(self, x0, y0, x1, y1, start, end, rgb, width=1):
-        """Angles in degrees, 0 at 3 o'clock, increasing clockwise."""
+        """Arc of an ellipse. Angles in degrees, 0 at 3 o'clock,
+        increasing clockwise (y grows downwards)."""
         cx = (x0 + x1) / 2.0
         cy = (y0 + y1) / 2.0
         rx = (x1 - x0) / 2.0
@@ -1978,7 +473,8 @@ class Canvas:
                 self.line(prev[0], prev[1], px, py, rgb, width)
             prev = (px, py)
 
-    def fill_polygon(self, points, rgb):
+    def poly(self, points, rgb):
+        """Filled polygon, scanline by scanline."""
         ys = [p[1] for p in points]
         ymin = max(int(math.floor(min(ys))), 0)
         ymax = min(int(math.ceil(max(ys))), self.h - 1)
@@ -1992,54 +488,39 @@ class Canvas:
                     xs.append(x1 + (y - y1) * (x2 - x1) / (y2 - y1))
             xs.sort()
             for i in range(0, len(xs) - 1, 2):
-                self.fill_rect(int(math.ceil(xs[i])), y,
-                               int(math.floor(xs[i + 1])), y, rgb)
+                self.rect(int(math.ceil(xs[i])), y,
+                          int(math.floor(xs[i + 1])), y, rgb)
 
-    def text(self, x, y, s, fnt, fill):
-        fr, fg, fb = fill
-        pen = float(x)
-        buf = self.buf
-        W, H = self.w, self.h
+    def blit(self, x, y, s, fnt, fill):
+        """Draw text; (x, y) is the top-left of the glyph cells."""
+        pen = x
+        scale = fnt.scale
         for ch in s:
-            g = fnt.glyphs.get(ord(ch))
+            g = fnt.table.get(ord(ch))
             if g is None:
-                pen += fnt.space_adv
+                pen += 3 * scale
                 continue
-            adv, xo, yo, w, h, data = g
-            if w and h:
-                gx = int(pen) + xo
-                gy = y + yo
-                x0 = max(gx, 0)
-                y0 = max(gy, 0)
-                x1 = min(gx + w, W)
-                y1 = min(gy + h, H)
-                for yy in range(y0, y1):
-                    rowoff = (yy - gy) * w
-                    base = (yy * W + x0) * 3
-                    for xx in range(x0, x1):
-                        idx = rowoff + (xx - gx)
-                        byte = data[idx >> 1]
-                        a = (byte >> 4) if (idx & 1) == 0 else (byte & 15)
-                        if a == 0:
-                            continue
-                        o = base + (xx - x0) * 3
-                        if a == 15:
-                            buf[o] = fr
-                            buf[o + 1] = fg
-                            buf[o + 2] = fb
-                        else:
-                            inv = 15 - a
-                            buf[o] = (buf[o] * inv + fr * a) // 15
-                            buf[o + 1] = (buf[o + 1] * inv + fg * a) // 15
-                            buf[o + 2] = (buf[o + 2] * inv + fb * a) // 15
-            pen += adv
+            adv, rows = g
+            for r in range(fnt.rows):
+                bits = rows[r]
+                if fnt.bold:
+                    bits = bits | (bits >> 1)
+                if not bits:
+                    continue
+                yy = y + r * scale
+                for c in range(fnt.cols):
+                    if bits & (1 << (fnt.cols - 1 - c)):
+                        xx = pen + c * scale
+                        self.rect(xx, yy, xx + scale - 1,
+                                  yy + scale - 1, fill)
+            pen += adv * scale
 
 
-class Draw:
-    """Small drawing-API shim over Canvas (same call shapes as before)."""
+class Pen:
+    """A small drawing API over a Page, with PIL-like call shapes."""
 
-    def __init__(self, canvas):
-        self.c = canvas
+    def __init__(self, page):
+        self.p = page
 
     @staticmethod
     def _box(box):
@@ -2048,20 +529,20 @@ class Draw:
     def rectangle(self, box, fill=None, outline=None, width=1):
         x0, y0, x1, y1 = self._box(box)
         if fill is not None:
-            self.c.fill_rect(x0, y0, x1, y1, fill)
+            self.p.rect(x0, y0, x1, y1, fill)
         if outline is not None:
             for k in range(width):
-                self.c.fill_rect(x0 + k, y0 + k, x1 - k, y0 + k, outline)
-                self.c.fill_rect(x0 + k, y1 - k, x1 - k, y1 - k, outline)
-                self.c.fill_rect(x0 + k, y0 + k, x0 + k, y1 - k, outline)
-                self.c.fill_rect(x1 - k, y0 + k, x1 - k, y1 - k, outline)
+                self.p.rect(x0 + k, y0 + k, x1 - k, y0 + k, outline)
+                self.p.rect(x0 + k, y1 - k, x1 - k, y1 - k, outline)
+                self.p.rect(x0 + k, y0 + k, x0 + k, y1 - k, outline)
+                self.p.rect(x1 - k, y0 + k, x1 - k, y1 - k, outline)
 
     def ellipse(self, box, fill=None, outline=None, width=1):
         x0, y0, x1, y1 = self._box(box)
         if fill is not None:
-            self.c.fill_ellipse(x0, y0, x1, y1, fill)
+            self.p.disc(x0, y0, x1, y1, fill)
         if outline is not None:
-            self.c.ellipse_outline(x0, y0, x1, y1, outline)
+            self.p.ring(x0, y0, x1, y1, outline)
 
     def line(self, points, fill=None, width=1):
         if points and isinstance(points[0], (int, float)):
@@ -2070,21 +551,20 @@ class Draw:
         else:
             pts = [(int(p[0]), int(p[1])) for p in points]
         for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-            self.c.line(x0, y0, x1, y1, fill, width)
+            self.p.line(x0, y0, x1, y1, fill, width)
 
     def arc(self, box, start, end, fill=None, width=1):
         x0, y0, x1, y1 = self._box(box)
-        self.c.arc(x0, y0, x1, y1, start, end, fill, width)
+        self.p.arc(x0, y0, x1, y1, start, end, fill, width)
 
     def polygon(self, points, fill=None):
-        self.c.fill_polygon([(int(p[0]), int(p[1])) for p in points], fill)
+        self.p.poly([(int(p[0]), int(p[1])) for p in points], fill)
 
     def text(self, xy, s, font=None, fill=None):
-        self.c.text(int(xy[0]), int(xy[1]), s, font, fill)
+        self.p.blit(int(xy[0]), int(xy[1]), s, font, fill)
 
     def textlength(self, s, font=None):
-        return font.textlength(s)
-
+        return font.width(s)
 
 # ---------------------------------------------------------------- PNG encoder
 _ABS = bytes(min(b, 256 - b) for b in range(256))
@@ -2095,12 +575,23 @@ def _chunk(typ, data):
             struct.pack(">I", zlib.crc32(typ + data) & 0xFFFFFFFF))
 
 
-def encode_png(canvas):
-    """RGB PNG, 8-bit. Per scanline, filters 0 (None), 1 (Sub) and 2 (Up)
-    are tried and the one with the smallest sum of absolute signed
-    filtered bytes wins; the result is zlib-compressed at level 9."""
-    w, h = canvas.w, canvas.h
-    buf = canvas.buf
+def _filtered(row, prev):
+    """The three candidate encodings of one scanline: filter 0 (None),
+    filter 1 (Sub) and filter 2 (Up), each as (filter, bytes, score),
+    where the score is the sum of the absolute values of the signed
+    filtered bytes. The smallest score wins."""
+    cands = [(0, row, sum(row.translate(_ABS)))]
+    sub = row[:3] + bytes((a - b) & 0xFF for a, b in zip(row[3:], row))
+    cands.append((1, sub, sum(sub.translate(_ABS))))
+    up = bytes((a - b) & 0xFF for a, b in zip(row, prev))
+    cands.append((2, up, sum(up.translate(_ABS))))
+    return min(cands, key=lambda c: c[2])
+
+
+def encode_png(page):
+    """RGB PNG, 8-bit, zlib level 9, one filter byte per scanline."""
+    w, h = page.w, page.h
+    buf = page.buf
     stride = w * 3
     out = bytearray(b"\x89PNG\r\n\x1a\n")
     out += _chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
@@ -2108,18 +599,8 @@ def encode_png(canvas):
     prev = bytes(stride)
     for y in range(h):
         row = bytes(buf[y * stride:(y + 1) * stride])
-        best = row
-        best_score = sum(row.translate(_ABS))
-        best_f = 0
-        sub = row[:3] + bytes((a - b) & 0xFF for a, b in zip(row[3:], row))
-        s = sum(sub.translate(_ABS))
-        if s < best_score:
-            best_score, best, best_f = s, sub, 1
-        up = bytes((a - b) & 0xFF for a, b in zip(row, prev))
-        s = sum(up.translate(_ABS))
-        if s < best_score:
-            best_score, best, best_f = s, up, 2
-        raw.append(best_f)
+        f, best, _score = _filtered(row, prev)
+        raw.append(f)
         raw += best
         prev = row
     out += _chunk(b"IDAT", zlib.compress(bytes(raw), 9))
@@ -2128,12 +609,12 @@ def encode_png(canvas):
 
 
 # ---------------------------------------------------------------- text tools
-def wrap(draw, text, fnt, width):
-    """Greedy word wrap; returns a list of lines that fit `width`."""
+def wrap(pen, text, fnt, width):
+    """Greedy word wrap; returns the lines that fit `width`."""
     lines, cur = [], ""
     for word in text.split():
         trial = (cur + " " + word).strip()
-        if draw.textlength(trial, font=fnt) <= width or not cur:
+        if pen.textlength(trial, font=fnt) <= width or not cur:
             cur = trial
         else:
             lines.append(cur)
@@ -2143,24 +624,19 @@ def wrap(draw, text, fnt, width):
     return lines
 
 
-def draw_wrapped(draw, x, y, text, fnt, width, fill=INK, spacing=2,
+def draw_wrapped(pen, x, y, text, fnt, width, fill=INK,
                  max_lines=None, line_h=None):
-    """Draw wrapped text; returns (lines_drawn, height_used)."""
-    lines = wrap(draw, text, fnt, width)
+    """Draw wrapped text; returns (lines drawn, height used)."""
+    lines = wrap(pen, text, fnt, width)
     if max_lines is not None and len(lines) > max_lines:
         lines = lines[:max_lines]
-        # ellipsize the last line
-        while lines and draw.textlength(lines[-1] + " ...", font=fnt) > width:
+        while lines and pen.textlength(lines[-1] + " ...", font=fnt) > width:
             lines[-1] = lines[-1][:-1].rstrip()
         lines[-1] = lines[-1] + " ..."
-    lh = line_h or int(fnt.size * 1.22)
+    lh = line_h or int(fnt.scale * fnt.rows * 1.22)
     for i, ln in enumerate(lines):
-        draw.text((x, y + i * lh), ln, font=fnt, fill=fill)
+        pen.text((x, y + i * lh), ln, font=fnt, fill=fill)
     return len(lines), len(lines) * lh
-
-
-def text_h(fnt, lines=1, spacing=2):
-    return int(fnt.size * 1.22) * lines + spacing * max(0, lines - 1)
 
 # ---------------------------------------------------------------- art panels
 def art_kyiv(d, x, y, w, h):
@@ -2233,7 +709,7 @@ def art_cyclone(d, x, y, w, h):
                (x + w, y + h)], fill=(214, 196, 150))
     d.ellipse([x + 0.74 * w, y + 0.42 * h, x + 0.74 * w + 7, y + 0.42 * h + 7],
               fill=RED)
-    d.text((x + 0.76 * w, y + 0.40 * h), "GOPALPUR", font=font("sans_b", 10),
+    d.text((x + 0.76 * w, y + 0.40 * h), "GOPALPUR", font=face("sans_b", 10),
            fill=(60, 40, 20))
     d.rectangle([x, y, x + w, y + h], outline=(26, 26, 26), width=1)
 
@@ -2259,18 +735,17 @@ def art_markets(d, x, y, w, h):
     for px, py in pts:
         d.ellipse([px - 3, py - 3, px + 3, py + 3], fill=RED_DARK)
     # labels
-    d.text((x + 10, y + 8), "NIKKEI \u22124.8%", font=font("sans_b", 12), fill=RED_DARK)
-    d.text((x + w - 108, y + 8), "TAIEX \u22126.8%", font=font("sans_b", 12), fill=RED_DARK)
-    d.text((x + 10, y + h - 26), "KOSPI \u22125.2%", font=font("sans_b", 12), fill=RED_DARK)
+    d.text((x + 10, y + 8), "NIKKEI −4.8%", font=face("sans_b", 12), fill=RED_DARK)
+    d.text((x + w - 108, y + 8), "TAIEX −6.8%", font=face("sans_b", 12), fill=RED_DARK)
+    d.text((x + 10, y + h - 26), "KOSPI −5.2%", font=face("sans_b", 12), fill=RED_DARK)
     d.rectangle([x, y, x + w, y + h], outline=(26, 26, 26), width=1)
 
 
 ART = {"kyiv": art_kyiv, "cyclone": art_cyclone, "markets": art_markets}
 
-
 # ---------------------------------------------------------------- sections
 def section_rule(d, x, y, w, label):
-    f = font("sans_b", 11)
+    f = face("sans_b", 11)
     d.text((x, y), label, font=f, fill=INK)
     tw = d.textlength(label, font=f)
     d.line([x + tw + 8, y + 7, x + w, y + 7], fill=RULE, width=1)
@@ -2281,16 +756,16 @@ def draw_masthead(d):
     # top hairlines
     d.line([24, 12, W - 24, 12], fill=RULE, width=2)
     d.line([24, 16, W - 24, 16], fill=RULE, width=1)
-    f_small = font("sans", 11)
-    d.text((24, 22), "VOL. I \u2014 No. 325", font=f_small, fill=INK_SOFT)
-    d.text((W - 24 - d.textlength("ONE DAY \u00b7 ONE PAGE \u00b7 THE WHOLE WORLD", font=f_small), 22),
-           "ONE DAY \u00b7 ONE PAGE \u00b7 THE WHOLE WORLD", font=f_small, fill=INK_SOFT)
-    f_title = font("serif_b", 56)
+    f_small = face("sans", 11)
+    d.text((24, 22), "VOL. I — No. 325", font=f_small, fill=INK_SOFT)
+    d.text((W - 24 - d.textlength("ONE DAY · ONE PAGE · THE WHOLE WORLD", font=f_small), 22),
+           "ONE DAY · ONE PAGE · THE WHOLE WORLD", font=f_small, fill=INK_SOFT)
+    f_title = face("serif_b", 56)
     t = MASTHEAD_TITLE
-    d.text(((W - d.textlength(t, font=f_title)) / 2, 36), t, font=f_title, fill=INK)
+    d.text(((W - d.textlength(t, font=f_title)) / 2, 40), t, font=f_title, fill=INK)
     # dateline bar
     d.rectangle([24, 102, W - 24, 130], fill=INK)
-    f_date = font("sans_b", 15)
+    f_date = face("sans_b", 15)
     d.text((36, 109), DATE_LINE, font=f_date, fill=WHITE)
     cw = d.textlength(COUNT_LINE, font=f_date)
     d.text((W - 36 - cw, 109), COUNT_LINE, font=f_date, fill=WHITE)
@@ -2299,8 +774,8 @@ def draw_masthead(d):
 def draw_stats(d):
     y0, y1, x0 = 140, 186, 24
     w = (W - 48 - 3 * 10) / 4
-    f_big = font("sans_b", 20)
-    f_lab = font("sans", 11)
+    f_big = face("sans_b", 20)
+    f_lab = face("sans", 11)
     for i, (big, lab) in enumerate(STATS):
         x = x0 + i * (w + 10)
         d.rectangle([x, y0, x + w, y1], outline=GREY_LINE, width=1, fill=CREAM)
@@ -2314,16 +789,16 @@ def draw_lead(d, x, y, w, lead):
     art_h = 130
     ART[lead["art"]](d, x, y, w, art_h)
     yy = y + art_h + 8
-    f_kick = font("sans_b", 10)
+    f_kick = face("sans_b", 10)
     d.text((x, yy), lead["kicker"], font=f_kick, fill=lead["accent"])
     yy += 15
     d.line([x, yy, x + w, yy], fill=GREY_LINE, width=1)
     yy += 6
-    f_head = font("serif_b", 21)
+    f_head = face("serif_b", 21)
     _, used = draw_wrapped(d, x, yy, lead["headline"], f_head, w, max_lines=2,
                            line_h=25)
     yy += used + 4
-    f_deck = font("sans", 12)
+    f_deck = face("sans", 12)
     draw_wrapped(d, x, yy, lead["deck"], f_deck, w, max_lines=2, line_h=15)
 
 
@@ -2332,19 +807,19 @@ def draw_card(d, x, y, w, h, kicker, headline, deck, idx):
     d.rectangle([x, y, x + 4, y + h], fill=RED if idx % 3 == 0 else
                 (BLUE if idx % 3 == 1 else TEAL))
     tx = x + 12
-    f_kick = font("sans_b", 9)
+    f_kick = face("sans_b", 9)
     d.text((tx, y + 7), kicker, font=f_kick, fill=INK_SOFT)
-    f_head = font("serif_b", 13)
+    f_head = face("serif_b", 13)
     _, used = draw_wrapped(d, tx, y + 22, headline, f_head, w - 22,
                            max_lines=2, line_h=16)
-    f_deck = font("sans", 11)
+    f_deck = face("sans", 11)
     draw_wrapped(d, tx, y + 22 + used + 2, deck, f_deck, w - 22,
                  fill=INK_SOFT, max_lines=2, line_h=13)
 
 
 def draw_map(d, x, y, w, h):
     d.rectangle([x, y, x + w, y + h], outline=GREY_LINE, width=1, fill=MAP_SEA)
-    section_rule(d, x + 10, y + 8, w - 20, "THE WORLD AT A GLANCE \u2014 SCHEMATIC MAP")
+    section_rule(d, x + 10, y + 8, w - 20, "THE WORLD AT A GLANCE — SCHEMATIC MAP")
     my = y + 30
     mh = h - 30 - 40
     # graticule
@@ -2357,7 +832,7 @@ def draw_map(d, x, y, w, h):
         d.ellipse([x + (cx - rx) * w, my + (cy - ry) * mh,
                    x + (cx + rx) * w, my + (cy + ry) * mh], fill=MAP_LAND,
                   outline=(160, 170, 150), width=1)
-    f_dot = font("sans_b", 9)
+    f_dot = face("sans_b", 9)
     for label, px, py in MAP_POINTS:
         num, name = label.split(" ", 1)
         dx, dy = x + px * w, my + py * mh
@@ -2366,7 +841,7 @@ def draw_map(d, x, y, w, h):
         d.text((dx - tw / 2, dy - 6), num, font=f_dot, fill=WHITE)
     # legend
     ly = my + mh + 8
-    f_leg = font("sans", 10)
+    f_leg = face("sans", 10)
     for i, line in enumerate(MAP_LEGEND):
         d.text((x + 10, ly + i * 13), line, font=f_leg, fill=INK_SOFT)
 
@@ -2374,8 +849,8 @@ def draw_map(d, x, y, w, h):
 def draw_right(d, x, y, w):
     section_rule(d, x, y, w, "THE DAY IN ORDER")
     yy = y + 24
-    f_t = font("sans_b", 11)
-    f_b = font("sans", 11)
+    f_t = face("sans_b", 11)
+    f_b = face("sans", 11)
     for when, what in TIMELINE:
         d.text((x, yy), when, font=f_t, fill=RED_DARK)
         d.text((x + 82, yy), what, font=f_b, fill=INK)
@@ -2386,27 +861,27 @@ def draw_right(d, x, y, w):
 def draw_brief_strip(d, x, y, w):
     section_rule(d, x, y, w, "IN BRIEF")
     yy = y + 20
-    f_br = font("sans", 11)
+    f_br = face("sans", 11)
     col_w = (w - 2 * 16) / 3
     for i, item in enumerate(BRIEF):
         cx = x + (i % 3) * (col_w + 16)
         cy = yy + (i // 3) * 15
-        d.text((cx, cy), "\u25aa ", font=f_br, fill=RED)
+        d.text((cx, cy), "▪ ", font=f_br, fill=RED)
         d.text((cx + 12, cy), item, font=f_br, fill=INK_SOFT)
 
 
 def draw_footer(d):
-    f = font("sans", 9)
-    line = ("All stories reported on Friday 20 November 2026 \u00b7 Figures as reported by "
-            "Reuters, AP, BBC, CNN, IMD, the UN and ISW \u00b7 THE WORLD IN ONE PAGE")
+    f = face("sans", 9)
+    line = ("All stories reported on Friday 20 November 2026 · Figures as reported by "
+            "Reuters, AP, BBC, CNN, IMD, the UN and ISW · THE WORLD IN ONE PAGE")
     d.text(((W - d.textlength(line, font=f)) / 2, H - 12), line, font=f,
            fill=INK_SOFT)
 
 
 # ---------------------------------------------------------------- assemble
 def build():
-    canvas = Canvas(W, H, PAPER)
-    d = Draw(canvas)
+    page = Page(W, H, PAPER)
+    d = Pen(page)
     draw_masthead(d)
     draw_stats(d)
     # leads
@@ -2428,14 +903,14 @@ def build():
     draw_brief_strip(d, 24, 946, W - 48)
     d.line([24, 1010, W - 24, 1010], fill=RULE, width=1)
     draw_footer(d)
-    return canvas
+    return page
 
 
 def main():
-    canvas = build()
+    page = build()
     os.makedirs(os.path.dirname(OUT) or ".", exist_ok=True)
     with open(OUT, "wb") as fh:
-        fh.write(encode_png(canvas))
+        fh.write(encode_png(page))
 
 
 if __name__ == "__main__":
